@@ -114,7 +114,7 @@
                (bound-identifier=? stx ellipsis)))))
   ;; 
   ;; 
-  (define (is-ellipsis-list ellipsis patcdr)
+  (define (is-ellipsis-list patcdr)
     (if (null? patcdr)
         (values #f (compile patcdr))
         (let ((patcadr (unwrap-syntax (car patcdr))))
