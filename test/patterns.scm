@@ -58,7 +58,26 @@
     (test-equal "first" 1 (hashmap-ref returned (empty-wrap 'x)))
     (test-equal "second" 2 (hashmap-ref returned (empty-wrap 'y)))))
 
+(define (test-simple-ellipsis)
+  (define matcher
+    (compile-pattern ellipsis
+                     empty-set
+                     (list (empty-wrap 'x) ellipsis)))
+  (let* ((list '(1 2 3 4 5 6 7 8))
+         (returned (matcher empty-map list))
+         (x-value (hashmap-ref returned (empty-wrap 'x))))
+    (test-assert "returned is matched-ellipsis"
+                 (matched-ellipsis? x-value))
+    (test-equal "(x ...)"
+                (reverse list)
+                (matched-ellipsis-reversed-list x-value)))
+  #;(let* ((returned (matcher empty-map '()))
+           (x-value (hashmap-ref returned (empty-wrap 'x))))))
+
 (define (test-patterns)
   (test-group "single match" (test-single-match))
   (test-group "test match in list" (test-match-in-list))
-  (test-group "test multiple matches in list" (test-multiple-matches-in-list)))
+  (test-group "test multiple matches in list"
+    (test-multiple-matches-in-list))
+  (test-group "simple ellipsis" (test-simple-ellipsis))
+  )

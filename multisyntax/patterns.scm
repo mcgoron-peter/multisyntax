@@ -49,26 +49,24 @@
   (define (proc key val names)
     (hashmap-update/default names
                             key
-                            (cut push-to-matched-ellipsis key <>)
+                            (cut push-to-matched-ellipsis val <>)
                             (make-matched-ellipsis '())))
   (hashmap-fold proc oldnames newnames))
 
 (define (compile-ellipsis match-patcar match-patcddr)
-  (letrec ((match*
-            (lambda (names stx)
-              (let ((stx (unwrap-syntax stx)))
-                (cond
-                  ((null? stx) names)
-                  ((not (pair? stx)) #f)
-                  ((match-patcar empty-map (car stx))
-                   => (lambda (newnames)
-                        (cond
-                          ((match* (merge-names names newnames)
-                                   (cdr stx))
-                           => values)
-                          (else (match-patcddr names stx)))))
-                  (else (match-patcddr names stx)))))))
-    match*))
+  (define (match* names stx)
+    (let ((stx (unwrap-syntax stx)))
+      (cond
+        ((null? stx) names)
+        ((not (pair? stx)) #f)
+        ((match-patcar empty-map (car stx))
+         => (lambda (newnames)
+              (cond
+                ((match* (merge-names names newnames) (cdr stx))
+                 => values)
+                (else (match-patcddr names stx)))))
+        (else (match-patcddr names stx)))))
+  match*)
 
 (define (compile-actual-pair match-patcar match-patcdr)
   (lambda (names stx)

@@ -14,7 +14,7 @@
  |#
 
 (define-library (multisyntax patterns test)
-  (import (scheme base) (srfi 113) (srfi 146 hash)
+  (import (scheme base) (scheme write) (srfi 113) (srfi 146 hash)
           (multisyntax syntax-object)
           (multisyntax patterns))
   (cond-expand
