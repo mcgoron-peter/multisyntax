@@ -23,6 +23,7 @@
           lexical-location->string
           lexical-location-comparator
           environment-key-comparator
+          bound-identifier-comparator
           ;; Misc. predicates
           self-syntax? syntax?
           ;; Operations on wraps

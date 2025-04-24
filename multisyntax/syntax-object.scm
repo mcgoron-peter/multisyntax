@@ -241,8 +241,9 @@
            (add-timestamps/same-wrap stx id location-to))))))
 
 (define (generate-unique-symbol)
-  ;; An actual implementation of this procedure would require implementation
-  ;; support.
+  ;; Tries as best as possible to generate a unique symbol. Not read/write
+  ;; invariant. An actual implementation of this procedure would require
+  ;; implementation support.
   (string->symbol
    (string-append "gensym."
                   (number->string
@@ -283,18 +284,27 @@
        (set=? (wrap->timestamps id1) (wrap->timestamps id2))))
 
 (define bound-identifier-comparator
-  (make-comparator
-   identifier?
-   bound-identifier=?
-   (lambda (id-1 id-2)
-     (if (<? environment-key-comparator (resolve id-1) (resolve id-2))
-         #t
-         (<? set-comparator
-             (wrap->timestamps id-1)
-             (wrap->timestamps id-2))))
-   (lambda (id)
-     (+ (comparator-hash set-comparator (wrap->timestamps id))
-        (comparator-hash environment-key-comparator (resolve id))))))
+  (let ((bound-identifier<?
+         (lambda (id1 id2)
+           (comparator-if<=> environment-key-comparator
+                             (resolve id1)
+                             (resolve id2)
+             #t
+             (<? set-comparator
+                 (wrap->timestamps id1)
+                 (wrap->timestamps id2))
+             #f)))
+        (bound-identifier-hash
+         (lambda (id)
+           (+ (comparator-hash set-comparator
+                               (wrap->timestamps id))
+              (comparator-hash environment-key-comparator
+                               (resolve id))))))
+    (make-comparator
+     identifier?
+     bound-identifier=?
+     bound-identifier<?
+     bound-identifier-hash)))
 
 (define (push-wrap stx expr)
   ;; Give `expr` the wrap of `stx`. This does not check that `stx` does
