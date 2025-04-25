@@ -15,8 +15,7 @@
 
 (define-library (multisyntax patterns)
   (import (scheme base) (scheme write)
-          (srfi 26) (srfi 113) (srfi 146 hash)
+          (srfi 26) (srfi 111) (srfi 113) (srfi 146 hash)
           (multisyntax syntax-object))
-  (export compile-pattern matched-ellipsis?
-          matched-ellipsis-reversed-list)
+  (export compile-pattern)
   (include "patterns.scm"))
