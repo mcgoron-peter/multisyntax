@@ -188,6 +188,41 @@
                   "value"
                   (hashmap-ref returned (empty-wrap 'x))))))
 
+(define (test-ignored-pattern)
+  (define-values (matcher names)
+    (compile-pattern ellipsis
+                     '()
+                     (list (empty-wrap '_) (empty-wrap 'x))))
+  (test-equal "names is length 1"
+              1
+              (hashmap-size names))
+  (test-assert "names contains x"
+               (hashmap-contains? names (empty-wrap 'x)))
+  (let ((returned (matcher empty-map '(1 2))))
+    (test-equal "x"
+                2
+                (hashmap-ref returned (empty-wrap 'x)))))
+
+(define (test-matching-a-vector)
+  (define-values (matcher names)
+    (compile-pattern ellipsis
+                     (list (empty-wrap 'then))
+                     (vector (empty-wrap 'x)
+                             ellipsis
+                             (empty-wrap 'then)
+                             (empty-wrap 'y))))
+  (let ((returned (matcher empty-map
+                           (vector 1 2 3 4 5
+                                   (empty-wrap 'then)
+                                   6))))
+    (test-assert "matched" returned)
+    (test-equal "x"
+                  '(5 4 3 2 1)
+                  (hashmap-ref returned (empty-wrap 'x)))
+    (test-equal "y"
+                  6
+                  (hashmap-ref returned (empty-wrap 'y)))))
+
 (define (test-patterns)
   (test-group "single match" (test-single-match))
   (test-group "test match in list" (test-match-in-list))
@@ -196,4 +231,6 @@
   (test-group "simple ellipsis" (test-simple-ellipsis))
   (test-group "test multiple ellipsis" (test-multiple-ellipsis))
   (test-group "test nested ellipsis" (test-nested-ellipsis))
-  (test-group "test single literal" (test-single-literal)))
+  (test-group "test single literal" (test-single-literal))
+  (test-group "test ignored pattern" (test-ignored-pattern))
+  (test-group "test matching a vector" (test-matching-a-vector)))

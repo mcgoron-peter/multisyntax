@@ -264,6 +264,9 @@
 ;;; Compile vectors
 ;;; ;;;;;;;;;;;;;;;;;;;
 
+(define (index-in-range? vec i)
+  (and (>= i 0) (< i (vector-length vec))))
+
 (define (compile-vector vec)
   ;; Vector patterns are traversed in reverse order, which means that
   ;; 
@@ -273,10 +276,10 @@
   ;; The internal vector procedures take an extra argument, `i`, which
   ;; is the current index into the matched vector.
   (define entry
-    (let compile-index ((i 0)
+    (let compile-index ((i (- (vector-length vec) 1))
                         (k match-end-of-vector))
       (cond
-        ((zero? i) k)
+        ((< i 0) k)
         (else
          (let ((cur (vector-ref vec i)))
            (if (actual-ellipsis? cur)
@@ -285,7 +288,9 @@
                (compile-index (- i 1)
                               (compile-pattern-in-vector cur k))))))))
   (lambda (names stx)
-    (entry names stx 0)))
+    (if (vector? stx)
+        (entry names stx 0)
+        #f)))
 
 (define (match-end-of-vector names vec i)
   ;; Compiled procedure to match the end of a vector. This is constant for
@@ -296,7 +301,7 @@
 
 (define (compile-vector-ellipsis vec i match-rest)
   ;; Compile the pattern in `vec` at `i` as an ellipsis pattern.
-  (when (= i 0)
+  (when (< i 0)
     (error "... is not allowed at the start of a vector" vec))
   (let ((cur (vector-ref vec i)))
     (when (actual-ellipsis? cur)
@@ -306,7 +311,7 @@
         (let match* ((names (hashmap-union names default-names))
                      (i i))
           (cond
-            ((= i (vector-length vec)) (match-rest names vec i))
+            ((not (index-in-range? vec i)) (match-rest names vec i))
             ((match (empty-map) (vector-ref vec i))
              => (lambda (new-names)
                   (cond
@@ -320,8 +325,9 @@
   ;; Compile `pattern` to be matched in a vector.
   (define match (compile pattern))
   (lambda (names vec i)
-    (let ((stx (vector-ref vec i)))
-      (cond
-        ((match names stx) => (cute match-rest <> vec (+ i 1)))
-        (else #f)))))
+    (cond
+      ((not (index-in-range? vec i)) #f)
+      ((match names (vector-ref vec i))
+       => (cute match-rest <> vec (+ i 1)))
+      (else #f))))
 
