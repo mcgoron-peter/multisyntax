@@ -125,6 +125,13 @@
   ;; 
   ;; Returns two values, the binding map and the matcher, which is a
   ;; procedure `binding-map * syntax -> (or binding-map #f)`.
+  (set! literals
+        (cond
+          ((set? literals) literals)
+          ((null? literals) (set bound-identifier-comparator))
+          ((pair? literals)
+           (list->set bound-identifier-comparator literals))
+          (else (error "invalid literals" literals))))
   (parameterize ((nesting-level 0)
                  (actual-ellipsis-container
                   (if (set-contains? literals ellipsis)
@@ -177,7 +184,8 @@
        (error "not syntax" pattern))
       ((literal? pattern)
        (lambda (names stx)
-         (and (bound-identifier=? stx pattern)
+         (and (identifier? stx)
+              (bound-identifier=? stx pattern)
               names)))
       ((actual-ellipsis? pattern)
        (error "invalid ellipsis location" pattern))

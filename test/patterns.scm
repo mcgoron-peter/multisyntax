@@ -19,9 +19,7 @@
 
 (define (test-single-match)
   (define-values (matcher names)
-    (compile-pattern ellipsis
-                     empty-set
-                     (empty-wrap 'x)))
+    (compile-pattern ellipsis '() (empty-wrap 'x)))
   (test-equal "nesting level of identifier"
               0
               (hashmap-ref names (empty-wrap 'x)))
@@ -40,9 +38,7 @@
 
 (define (test-match-in-list)
   (define-values (matcher names)
-    (compile-pattern ellipsis
-                     empty-set
-                     (list (empty-wrap 'x))))
+    (compile-pattern ellipsis '() (list (empty-wrap 'x))))
   (test-equal "nesting level of identifier"
               0
               (hashmap-ref names (empty-wrap 'x)))
@@ -56,10 +52,8 @@
 
 (define (test-multiple-matches-in-list)
   (define-values (matcher names)
-    (compile-pattern ellipsis
-                     empty-set
-                     (list (empty-wrap 'x)
-                           (empty-wrap 'y))))
+    (compile-pattern ellipsis '() (list (empty-wrap 'x)
+                                        (empty-wrap 'y))))
   (test-equal "nesting level of x"
               0
               (hashmap-ref names (empty-wrap 'x)))
@@ -73,7 +67,7 @@
 (define (test-simple-ellipsis)
   (define-values (matcher names)
     (compile-pattern ellipsis
-                     empty-set
+                     '()
                      (list (empty-wrap 'x) ellipsis)))
   (test-equal "nesting level of x"
               1
@@ -107,7 +101,7 @@
 (define (test-multiple-ellipsis)
   (define-values (matcher names)
     (compile-pattern ellipsis
-                     empty-set
+                     '()
                      (list (list (empty-wrap 'x) ellipsis)
                            (list (empty-wrap 'y) ellipsis))))
   (define (test-for list x y)
@@ -130,7 +124,7 @@
 (define (test-compound-ellipsis)
   (define-values (matcher names)
     (compile-pattern ellipsis
-                     empty-set
+                     '()
                      (list (list (empty-wrap 'name) (empty-wrap 'value))
                            ellipsis)))
   (define (test-for list x y)
@@ -151,7 +145,7 @@
 (define (test-nested-ellipsis)
   (define-values (matcher names)
     (compile-pattern ellipsis
-                     empty-set
+                     '()
                      (list (list (list (empty-wrap 'name) ellipsis)
                                  (empty-wrap 'value))
                            ellipsis)))
@@ -168,7 +162,31 @@
                (("name4" "name5" "name6") "value2"))
              '(("name6" "name5" "name4")
                ("name3" "name2" "name1"))
-             '("value2" "value1"))))
+             '("value2" "value1")))
+  (test-assert "non list fails"
+               (not (matcher empty-map
+                             '(("name1 value1") ("name2" "value2")))))
+  (test-assert "partial non list fails"
+               (not
+                (matcher
+                 empty-map
+                 '((("name1" "name2") "value1")
+                   ("name3" "value3"))))))
+
+(define (test-single-literal)
+  (define literal-list (list (empty-wrap 'literal)))
+  (define-values (matcher names)
+    (compile-pattern ellipsis
+                     literal-list
+                     (list (empty-wrap 'literal) (empty-wrap 'x))))
+  (test-assert "without literal fails"
+               (not
+                (matcher empty-map '("literal" "value"))))
+  (test-group "with literal succeeds"
+    (let ((returned (matcher empty-map `(,(empty-wrap 'literal) "value"))))
+      (test-equal "x"
+                  "value"
+                  (hashmap-ref returned (empty-wrap 'x))))))
 
 (define (test-patterns)
   (test-group "single match" (test-single-match))
@@ -177,4 +195,5 @@
     (test-multiple-matches-in-list))
   (test-group "simple ellipsis" (test-simple-ellipsis))
   (test-group "test multiple ellipsis" (test-multiple-ellipsis))
-  (test-group "test nested ellipsis" (test-nested-ellipsis)))
+  (test-group "test nested ellipsis" (test-nested-ellipsis))
+  (test-group "test single literal" (test-single-literal)))
