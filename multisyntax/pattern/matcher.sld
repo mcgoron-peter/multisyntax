@@ -13,9 +13,9 @@
  | limitations under the License.
  |#
 
-(define-library (multisyntax patterns)
+(define-library (multisyntax pattern matcher)
   (import (scheme base) (scheme write)
           (srfi 26) (srfi 111) (srfi 113) (srfi 146 hash)
           (multisyntax syntax-object))
   (export compile-pattern)
-  (include "patterns.scm"))
+  (include "matcher.scm"))

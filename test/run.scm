@@ -15,7 +15,7 @@
 
 (test-syntax-object)
 
-(load "../multisyntax/patterns.sld")
-(load "patterns.sld")
-(import (multisyntax patterns test))
+(load "../multisyntax/pattern/matcher.sld")
+(load "pattern/matcher.sld")
+(import (multisyntax pattern matcher test))
 (test-patterns)

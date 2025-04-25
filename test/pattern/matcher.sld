@@ -13,13 +13,13 @@
  | limitations under the License.
  |#
 
-(define-library (multisyntax patterns test)
+(define-library (multisyntax pattern matcher test)
   (import (scheme base) (scheme write) (srfi 113) (srfi 146 hash)
           (multisyntax syntax-object)
-          (multisyntax patterns))
+          (multisyntax pattern matcher))
   (cond-expand
     (chicken (import (srfi 64)
                      (chicken condition)))
     (else))
   (export test-patterns)
-  (include "patterns.scm"))
+  (include "matcher.scm"))
