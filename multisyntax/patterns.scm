@@ -37,6 +37,15 @@
  | collected.
  |#
 
+#;(define (display-hashmap hashmap)
+  (display
+   (list
+    "hashmap:"
+    (map (lambda (pair)
+           (cons (syntax->datum (car pair))
+                 (cdr pair)))
+         (hashmap->alist hashmap)))))
+
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Parameter objects for the parser
 ;;; 
@@ -143,7 +152,7 @@
   ;; each to the lists in `oldnames` associated with each name and return
   ;; the merged list.
   (define (proc key val names)
-    (hashmap-update names key (cut cons val <>)))
+    (hashmap-update/default names key (cut cons val <>) '()))
   (hashmap-fold proc oldnames newnames))
 
 ;;; ;;;;;;;;;;;;;;
@@ -225,8 +234,7 @@
         ((match-patcar (empty-map) (car stx))
          => (lambda (newnames)
               (cond
-                ((match* (merge-names names newnames)
-                         (cdr stx))
+                ((match* (merge-names names newnames) (cdr stx))
                  => values)
                 (else (match-patcddr names stx)))))
         (else (match-patcddr names stx))))))

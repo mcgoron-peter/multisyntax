@@ -81,11 +81,94 @@
   (let* ((list '(1 2 3 4 5 6 7 8))
          (returned (matcher empty-map list))
          (x-value (hashmap-ref returned (empty-wrap 'x))))
-    (test-equal "(x ...)"
+    (test-equal "(1 2 3 ...)"
                 (reverse list)
                 x-value))
-  #;(let* ((returned (matcher empty-map '()))
-           (x-value (hashmap-ref returned (empty-wrap 'x))))))
+  (let ((returned (matcher empty-map '())))
+    (test-equal "()"
+                '()
+                (hashmap-ref returned (empty-wrap 'x))))
+  (let* ((list (list (empty-wrap 'x)
+                     1
+                     (empty-wrap 'y)))
+         (returned (matcher empty-map list))
+         (values (hashmap-ref returned (empty-wrap 'x))))
+    (test-group "(x 1 y)"
+      (test-assert "y"
+                   (bound-identifier=?
+                    (list-ref values 0)
+                    (empty-wrap 'y)))
+      (test-equal 1 (list-ref values 1))
+      (test-assert "x"
+                   (bound-identifier=?
+                    (list-ref values 2)
+                    (empty-wrap 'x))))))
+
+(define (test-multiple-ellipsis)
+  (define-values (matcher names)
+    (compile-pattern ellipsis
+                     empty-set
+                     (list (list (empty-wrap 'x) ellipsis)
+                           (list (empty-wrap 'y) ellipsis))))
+  (define (test-for list x y)
+    (let ((returned (matcher empty-map list)))
+      (test-equal "x"
+                  x
+                  (hashmap-ref returned (empty-wrap 'x)))
+      (test-equal "y"
+                  y
+                  (hashmap-ref returned (empty-wrap 'y)))))
+  (test-group "two lists"
+    (test-for '((1 2 3 4) (5 6 7 8))
+              '(4 3 2 1)
+              '(8 7 6 5)))
+  (test-group "one list"
+    (test-for '((1 2 3 4) ())
+              '(4 3 2 1)
+              '())))
+
+(define (test-compound-ellipsis)
+  (define-values (matcher names)
+    (compile-pattern ellipsis
+                     empty-set
+                     (list (list (empty-wrap 'name) (empty-wrap 'value))
+                           ellipsis)))
+  (define (test-for list x y)
+    (let ((returned (matcher empty-map list)))
+      (test-equal "x"
+                  x
+                  (hashmap-ref returned (empty-wrap 'x)))
+      (test-equal "y"
+                  y
+                  (hashmap-ref returned (empty-wrap 'y)))))
+  (test-group "pairs"
+    (test-for '((1 2) (3 4) (5 6))
+              '(5 3 1)
+              '(6 4 2)))
+  (test-group "empty"
+    (test-for '() '() '())))
+
+(define (test-nested-ellipsis)
+  (define-values (matcher names)
+    (compile-pattern ellipsis
+                     empty-set
+                     (list (list (list (empty-wrap 'name) ellipsis)
+                                 (empty-wrap 'value))
+                           ellipsis)))
+  (define (test-of form names values)
+    (let ((returned (matcher empty-map form)))
+      (test-equal "names"
+                  names
+                  (hashmap-ref returned (empty-wrap 'name)))
+      (test-equal "values"
+                  values
+                  (hashmap-ref returned (empty-wrap 'value)))))
+  (test-group "let-values like form"
+    (test-of '((("name1" "name2" "name3") "value1")
+               (("name4" "name5" "name6") "value2"))
+             '(("name6" "name5" "name4")
+               ("name3" "name2" "name1"))
+             '("value2" "value1"))))
 
 (define (test-patterns)
   (test-group "single match" (test-single-match))
@@ -93,4 +176,5 @@
   (test-group "test multiple matches in list"
     (test-multiple-matches-in-list))
   (test-group "simple ellipsis" (test-simple-ellipsis))
-  )
+  (test-group "test multiple ellipsis" (test-multiple-ellipsis))
+  (test-group "test nested ellipsis" (test-nested-ellipsis)))
