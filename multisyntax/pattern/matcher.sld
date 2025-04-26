@@ -15,7 +15,8 @@
 
 (define-library (multisyntax pattern matcher)
   (import (scheme base) (scheme write) (scheme case-lambda)
-          (srfi 26) (srfi 111) (srfi 113) (srfi 146 hash)
+          (srfi 26) (srfi 111) (srfi 113) (srfi 146 hash) (srfi 197)
+          (multisyntax utils)
           (only (multisyntax syntax-object)
                 identifier? bound-identifier=? free-identifier=?
                 unwrap-syntax

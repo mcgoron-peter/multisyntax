@@ -21,7 +21,7 @@
 (define empty-set (set bound-identifier-comparator))
 
 (define (test-single-match)
-  (define-values (matcher names)
+  (define-values (matcher names _)
     (compile-pattern '() (empty-wrap 'x)))
   (test-equal "nesting info of identifier"
               (cons 0 #f)
@@ -40,7 +40,7 @@
                                      (empty-wrap 'y)))))
 
 (define (test-match-in-list)
-  (define-values (matcher names)
+  (define-values (matcher names _)
     (compile-pattern '() (list (empty-wrap 'x))))
   (test-equal "nesting info of identifier"
               (cons 0 #f)
@@ -54,7 +54,7 @@
                                      (empty-wrap 'y)))))
 
 (define (test-multiple-matches-in-list)
-  (define-values (matcher names)
+  (define-values (matcher names _)
     (compile-pattern '() (list (empty-wrap 'x)
                                (empty-wrap 'y))))
   (test-equal "nesting info of x"
@@ -68,11 +68,15 @@
     (test-equal "second" 2 (hashmap-ref returned (empty-wrap 'y)))))
 
 (define (test-simple-ellipsis)
-  (define-values (matcher names)
+  (define-values (matcher names levels)
     (compile-pattern '() (list (empty-wrap 'x) ellipsis)))
+  (define data-x (hashmap-ref names (empty-wrap 'x)))
   (test-equal "nesting level of x"
               1
-              (car (hashmap-ref names (empty-wrap 'x))))
+              (car data-x))
+  (test-equal "nested ellipsis groups of the group of x"
+              '()
+              (hashmap-ref levels (cdr data-x)))
   (let* ((list '(1 2 3 4 5 6 7 8))
          (returned (matcher list))
          (x-value (hashmap-ref returned (empty-wrap 'x))))
@@ -100,10 +104,12 @@
                     (empty-wrap 'x))))))
 
 (define (test-multiple-ellipsis)
-  (define-values (matcher names)
+  (define-values (matcher names levels)
     (compile-pattern '()
                      (list (list (empty-wrap 'x) ellipsis)
                            (list (empty-wrap 'y) ellipsis))))
+  (define data-x (hashmap-ref names (empty-wrap 'x)))
+  (define data-y (hashmap-ref names (empty-wrap 'y)))
   (define (test-for list x y)
     (let ((returned (matcher list)))
       (test-equal "x"
@@ -112,6 +118,16 @@
       (test-equal "y"
                   y
                   (hashmap-ref returned (empty-wrap 'y)))))
+  (test-equal "level of x" 1 (car data-x))
+  (test-equal "level of y" 1 (car data-y))
+  (test-assert "groups of x and y are different"
+               (not (= (cdr data-x) (cdr data-y))))
+  (test-equal "ellipses subgroups of x"
+              '()
+              (hashmap-ref levels (cdr data-y)))
+  (test-equal "ellipses subgroups of y"
+              '()
+              (hashmap-ref levels (cdr data-y)))
   (test-group "two lists"
     (test-for '((1 2 3 4) (5 6 7 8))
               '(4 3 2 1)
@@ -122,10 +138,12 @@
               '())))
 
 (define (test-compound-ellipsis)
-  (define-values (matcher names)
+  (define-values (matcher names levels)
     (compile-pattern '()
                      (list (list (empty-wrap 'name) (empty-wrap 'value))
                            ellipsis)))
+  (define data-x (hashmap-ref names (empty-wrap 'x)))
+  (define data-y (hashmap-ref names (empty-wrap 'y)))
   (define (test-for list x y)
     (let ((returned (matcher list)))
       (test-equal "x"
@@ -134,6 +152,10 @@
       (test-equal "y"
                   y
                   (hashmap-ref returned (empty-wrap 'y)))))
+  (test-equal "level of x" 1 (car data-x))
+  (test-equal "level of y" 1 (car data-y))
+  (test-equal "x and y are in the same group"
+              (= (cdr data-x) (cdr data-y)))
   (test-group "pairs"
     (test-for '((1 2) (3 4) (5 6))
               '(5 3 1)
@@ -142,11 +164,13 @@
     (test-for '() '() '())))
 
 (define (test-nested-ellipsis)
-  (define-values (matcher names)
+  (define-values (matcher names levels)
     (compile-pattern '()
                      (list (list (list (empty-wrap 'name) ellipsis)
                                  (empty-wrap 'value))
                            ellipsis)))
+  (define data-name (hashmap-ref names (empty-wrap 'name)))
+  (define data-value (hashmap-ref names (empty-wrap 'value)))
   (define (test-of form names values)
     (let ((returned (matcher form)))
       (test-equal "names"
@@ -155,6 +179,13 @@
       (test-equal "values"
                   values
                   (hashmap-ref returned (empty-wrap 'value)))))
+  (test-equal "level of name" 2 (car data-name))
+  (test-equal "level of value" 1 (car data-value))
+  (test-assert "name and value have different groups"
+               (not (= (cdr data-name) (cdr data-value))))
+  (test-assert "name group is a subset of value group"
+               (member (cdr data-name)
+                       (hashmap-ref levels (cdr data-value))))
   (test-group "let-values like form"
     (test-of '((("name1" "name2" "name3") "value1")
                (("name4" "name5" "name6") "value2"))
@@ -171,7 +202,7 @@
 
 (define (test-single-literal)
   (define literal-list (list (empty-wrap 'literal)))
-  (define-values (matcher names)
+  (define-values (matcher names levels)
     (compile-pattern literal-list
                      (list (empty-wrap 'literal) (empty-wrap 'x))))
   (test-assert "without literal fails"
@@ -184,7 +215,7 @@
                   (hashmap-ref returned (empty-wrap 'x))))))
 
 (define (test-ignored-pattern)
-  (define-values (matcher names)
+  (define-values (matcher names levels)
     (compile-pattern '()
                      (list (empty-wrap '_) (empty-wrap 'x))))
   (test-equal "names is length 1"
@@ -198,7 +229,7 @@
                 (hashmap-ref returned (empty-wrap 'x)))))
 
 (define (test-matching-a-vector)
-  (define-values (matcher names)
+  (define-values (matcher names levels)
     (compile-pattern (list (empty-wrap 'then))
                      (vector (empty-wrap 'x)
                              ellipsis

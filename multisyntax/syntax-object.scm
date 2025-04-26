@@ -19,19 +19,11 @@
 ;;; Timestamps
 ;;; ;;;;;;;;;;
 
-(define generate-unique-integer
-  ;; Generate a unique positive integer.
-  (let ((x 1))
-    (lambda ()
-      (set! x (+ x 1))
-      x)))
-
 (define generate-timestamp
   ;; A timestamp is an integer.
   generate-unique-integer)
 
-(define timestamp-comparator
-  (make-comparator exact-integer? = < number-hash))
+(define timestamp-comparator exact-integer-comparator)
 
 ;;; ;;;;;;;;;;;;;;;
 ;;; Locations and substitutions
@@ -60,13 +52,6 @@
   (string-append (symbol->string (lexical-location->symbol ll))
                  "."
                  (number->string (lexical-location->unique-id ll))))
-
-(define symbol-comparator
-  (make-comparator
-   symbol?
-   symbol=?
-   (lambda (x y) (string<? (symbol->string x) (symbol->string y)))
-   symbol-hash))
 
 (define environment-key-comparator
   ;; Comparator for keys to the environment that stores substitutions.

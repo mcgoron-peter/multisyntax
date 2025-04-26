@@ -18,7 +18,8 @@
 (define-library (multisyntax syntax-object)
   (import (scheme base) (scheme case-lambda)
           (scheme write)
-          (srfi 26) (srfi 113) (srfi 128) (srfi 133) (srfi 146) (srfi 228))
+          (srfi 26) (srfi 113) (srfi 128) (srfi 133) (srfi 146) (srfi 228)
+          (multisyntax utils))
   (export generate-lexical-location
           lexical-location->string
           lexical-location-comparator

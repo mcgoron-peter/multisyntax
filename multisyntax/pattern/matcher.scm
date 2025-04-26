@@ -1,4 +1,4 @@
-#| Copyright (c) Peter McGoron 2025
+ #| Copyright (c) Peter McGoron 2025
  |
  | Licensed under the Apache License, Version 2.0 (the "License");
  | you may not use this file except in compliance with the License.
@@ -22,11 +22,13 @@
  | 2. a hashmap from identifiers to `(cons x y)`, where
  |    `x` is the "ellipsis nesting level" and `y` is the "ellipsis group".
  |    The hashmap checks identifier according to `bound-identifier=?`.
+ | 3. A hashmap from ellipsis groups to ellipsis groups. These are the
+ |    ellipsis groups that occur inside of that ellipsis group.
  |
  | The matcher is implemented as a recursive procedure that accumulates
  | the result map as it continues. When it encounters a template of the
  | form `template ...` in a vector or a list, `template` is matched with
- | an empty identifier hashmap. map. If `template` successfully matches,
+ | an empty identifier hashmap. If `template` successfully matches,
  | the returned identifiers inside of that pattern are inserted into the
  | result map as elements of a list and then P is called again. This way,
  | multiple values from an ellipsis can be collected.
@@ -126,6 +128,19 @@
   ;; Current ellipsis group.
   (make-parameter #f))
 
+(define ellipsis-group-map
+  ;; Map containing the ellipsis group tree.
+  (make-parameter #f))
+
+(define (set-parameter! parameter operation)
+  ;; Set the box stored in `parameter` to the value returned by
+  ;; `(operation value)`, where `value` is the value stored in the box.
+  ;; 
+  ;; This has no effect if `box` is falsy.
+  (let ((box (parameter)))
+    (when box
+      (set-box! box (operation (unbox box))))))
+
 (define (call/nesting-level procedure . args)
   ;; Invoke (procedure args ...) with a higher nesting level and an empty
   ;; `bound-here` map. Also creates a new ellipsis group.
@@ -135,10 +150,20 @@
   ;; 1. `return` is the returned value from `(procedure args ...)`
   ;; 2. `map` is the map of identifiers at this nesting level to their
   ;;    default values (the empty list).
-  (let ((old-bound-here-box (bound-here)))
+  (let ((old-bound-here-box (bound-here))
+        (outer-ellipsis-group (ellipsis-group)))
     (parameterize ((nesting-level (+ (nesting-level) 1))
                    (bound-here (box (empty-map)))
                    (ellipsis-group (generate-unique-integer)))
+      (when outer-ellipsis-group
+        (set-parameter! ellipsis-group-map
+                        (cute hashmap-update!/default
+                              <>
+                              outer-ellipsis-group
+                              (cute cons (ellipsis-group) <>)
+                              '())))
+      (set-parameter! ellipsis-group-map
+                      (cute hashmap-set! <> (ellipsis-group) '()))
       (let ((returned (apply procedure args)))
         (values returned (unbox (bound-here)))))))
 
@@ -150,18 +175,19 @@
   ;; Add `identifier` to the name map with the current ellipsis nesting
   ;; level. If the identifier is added inside of an ellipses nesting level,
   ;; then it is also added to the `bound-here` map.
-  (let* ((the-box (bindings))
-         (old (unbox the-box)))
-    (when (hashmap-contains? old identifier)
-      (error "identifier bound twice" identifier))
-    (when (bound-here)
-      (set-box! (bound-here) (hashmap-set! (unbox (bound-here))
-                                           identifier
-                                           '())))
-    (set-box! the-box (hashmap-set! old
-                                    identifier
-                                    (cons (nesting-level)
-                                          (ellipsis-group))))))
+  (set-parameter! bound-here
+                  (lambda (bound-here)
+                    (hashmap-set! bound-here
+                                  identifier
+                                  '())))
+  (set-parameter!
+   bindings
+   (lambda (map)
+     (when (hashmap-contains? map identifier)
+       (error "identifier bound twice" identifier))
+     (hashmap-set! map
+                   identifier
+                   (cons (nesting-level) (ellipsis-group))))))
 
 (define (contains-as-free-identifier set key)
   ;; Returns an identifier if `key` is `free-identifier=?` to any
@@ -220,21 +246,16 @@
                       (actual-ellipsis-procedure
                        (generate-ellipsis-procedure literals ellipsis))
                       (literals-parameter literals)
-                      (bindings (box (empty-map))))
+                      (bindings (box (empty-map)))
+                      (ellipsis-group-map (box (hashmap exact-integer-comparator))))
          (let ((match (compile stx)))
-           (values (lambda (stx)
-                     (match (empty-map) stx))
-                   (unbox (bindings)))))))))
+           (values (lambda (stx) (match (empty-map) stx))
+                   (unbox (bindings))
+                   (unbox (ellipsis-group-map)))))))))
 
 ;;; ;;;;;;;;;;;;;;;;;;;;
 ;;; Helper functions
 ;;; ;;;;;;;;;;;;;;;;;;;;
-
-(define generate-unique-integer
-  (let ((i 0))
-    (lambda ()
-      (set! i (+ i 1))
-      i)))
 
 (define (empty-map)
   (hashmap bound-identifier-comparator))

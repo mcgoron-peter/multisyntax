@@ -7,6 +7,7 @@
            (test-runner-factory mcgoron-factory)
            (test-runner-current (mcgoron-factory))))
 
+(load "../multisyntax/utils.sld")
 (load "../multisyntax/syntax-object.sld")
 (load "syntax-object.sld")
 
