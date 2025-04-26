@@ -22,17 +22,17 @@
 
 (define (test-single-match)
   (define-values (matcher names)
-    (compile-pattern ellipsis '() (empty-wrap 'x)))
-  (test-equal "nesting level of identifier"
-              0
+    (compile-pattern '() (empty-wrap 'x)))
+  (test-equal "nesting info of identifier"
+              (cons 0 #f)
               (hashmap-ref names (empty-wrap 'x)))
-  (let ((returned (matcher empty-map (empty-wrap 'y))))
+  (let ((returned (matcher (empty-wrap 'y))))
     (test-assert "identifier"
                  (bound-identifier=? (hashmap-ref returned
                                                   (empty-wrap 'x))
                                      (empty-wrap 'y))))
-  (let* ((returned (matcher empty-map (list
-                                       (empty-wrap 'y))))
+  (let* ((returned (matcher (list
+                             (empty-wrap 'y))))
          (res (hashmap-ref returned (empty-wrap 'x))))
     (test-assert "match on list returns list" (list? res))
     (test-assert "is the same list"
@@ -41,54 +41,52 @@
 
 (define (test-match-in-list)
   (define-values (matcher names)
-    (compile-pattern ellipsis '() (list (empty-wrap 'x))))
-  (test-equal "nesting level of identifier"
-              0
+    (compile-pattern '() (list (empty-wrap 'x))))
+  (test-equal "nesting info of identifier"
+              (cons 0 #f)
               (hashmap-ref names (empty-wrap 'x)))
-  (let ((returned (matcher empty-map (empty-wrap 'y))))
+  (let ((returned (matcher (empty-wrap 'y))))
     (test-assert "does not match identifier"
                  (not returned)))
-  (let ((returned (matcher empty-map (list (empty-wrap 'y)))))
+  (let ((returned (matcher (list (empty-wrap 'y)))))
     (test-assert "matches inside of list"
                  (bound-identifier=? (hashmap-ref returned (empty-wrap 'x))
                                      (empty-wrap 'y)))))
 
 (define (test-multiple-matches-in-list)
   (define-values (matcher names)
-    (compile-pattern ellipsis '() (list (empty-wrap 'x)
-                                        (empty-wrap 'y))))
-  (test-equal "nesting level of x"
-              0
+    (compile-pattern '() (list (empty-wrap 'x)
+                               (empty-wrap 'y))))
+  (test-equal "nesting info of x"
+              (cons 0 #f)
               (hashmap-ref names (empty-wrap 'x)))
-  (test-equal "nesting level of y"
-              0
+  (test-equal "nesting info of y"
+              (cons 0 #f)
               (hashmap-ref names (empty-wrap 'y)))
-  (let ((returned (matcher empty-map (list 1 2))))
+  (let ((returned (matcher (list 1 2))))
     (test-equal "first" 1 (hashmap-ref returned (empty-wrap 'x)))
     (test-equal "second" 2 (hashmap-ref returned (empty-wrap 'y)))))
 
 (define (test-simple-ellipsis)
   (define-values (matcher names)
-    (compile-pattern ellipsis
-                     '()
-                     (list (empty-wrap 'x) ellipsis)))
+    (compile-pattern '() (list (empty-wrap 'x) ellipsis)))
   (test-equal "nesting level of x"
               1
-              (hashmap-ref names (empty-wrap 'x)))
+              (car (hashmap-ref names (empty-wrap 'x))))
   (let* ((list '(1 2 3 4 5 6 7 8))
-         (returned (matcher empty-map list))
+         (returned (matcher list))
          (x-value (hashmap-ref returned (empty-wrap 'x))))
     (test-equal "(1 2 3 ...)"
                 (reverse list)
                 x-value))
-  (let ((returned (matcher empty-map '())))
+  (let ((returned (matcher '())))
     (test-equal "()"
                 '()
                 (hashmap-ref returned (empty-wrap 'x))))
   (let* ((list (list (empty-wrap 'x)
                      1
                      (empty-wrap 'y)))
-         (returned (matcher empty-map list))
+         (returned (matcher list))
          (values (hashmap-ref returned (empty-wrap 'x))))
     (test-group "(x 1 y)"
       (test-assert "y"
@@ -103,12 +101,11 @@
 
 (define (test-multiple-ellipsis)
   (define-values (matcher names)
-    (compile-pattern ellipsis
-                     '()
+    (compile-pattern '()
                      (list (list (empty-wrap 'x) ellipsis)
                            (list (empty-wrap 'y) ellipsis))))
   (define (test-for list x y)
-    (let ((returned (matcher empty-map list)))
+    (let ((returned (matcher list)))
       (test-equal "x"
                   x
                   (hashmap-ref returned (empty-wrap 'x)))
@@ -126,12 +123,11 @@
 
 (define (test-compound-ellipsis)
   (define-values (matcher names)
-    (compile-pattern ellipsis
-                     '()
+    (compile-pattern '()
                      (list (list (empty-wrap 'name) (empty-wrap 'value))
                            ellipsis)))
   (define (test-for list x y)
-    (let ((returned (matcher empty-map list)))
+    (let ((returned (matcher list)))
       (test-equal "x"
                   x
                   (hashmap-ref returned (empty-wrap 'x)))
@@ -147,13 +143,12 @@
 
 (define (test-nested-ellipsis)
   (define-values (matcher names)
-    (compile-pattern ellipsis
-                     '()
+    (compile-pattern '()
                      (list (list (list (empty-wrap 'name) ellipsis)
                                  (empty-wrap 'value))
                            ellipsis)))
   (define (test-of form names values)
-    (let ((returned (matcher empty-map form)))
+    (let ((returned (matcher form)))
       (test-equal "names"
                   names
                   (hashmap-ref returned (empty-wrap 'name)))
@@ -167,55 +162,49 @@
                ("name3" "name2" "name1"))
              '("value2" "value1")))
   (test-assert "non list fails"
-               (not (matcher empty-map
-                             '(("name1 value1") ("name2" "value2")))))
+               (not (matcher '(("name1 value1") ("name2" "value2")))))
   (test-assert "partial non list fails"
                (not
                 (matcher
-                 empty-map
                  '((("name1" "name2") "value1")
                    ("name3" "value3"))))))
 
 (define (test-single-literal)
   (define literal-list (list (empty-wrap 'literal)))
   (define-values (matcher names)
-    (compile-pattern ellipsis
-                     literal-list
+    (compile-pattern literal-list
                      (list (empty-wrap 'literal) (empty-wrap 'x))))
   (test-assert "without literal fails"
                (not
-                (matcher empty-map '("literal" "value"))))
+                (matcher '("literal" "value"))))
   (test-group "with literal succeeds"
-    (let ((returned (matcher empty-map `(,(empty-wrap 'literal) "value"))))
+    (let ((returned (matcher `(,(empty-wrap 'literal) "value"))))
       (test-equal "x"
                   "value"
                   (hashmap-ref returned (empty-wrap 'x))))))
 
 (define (test-ignored-pattern)
   (define-values (matcher names)
-    (compile-pattern ellipsis
-                     '()
+    (compile-pattern '()
                      (list (empty-wrap '_) (empty-wrap 'x))))
   (test-equal "names is length 1"
               1
               (hashmap-size names))
   (test-assert "names contains x"
                (hashmap-contains? names (empty-wrap 'x)))
-  (let ((returned (matcher empty-map '(1 2))))
+  (let ((returned (matcher '(1 2))))
     (test-equal "x"
                 2
                 (hashmap-ref returned (empty-wrap 'x)))))
 
 (define (test-matching-a-vector)
   (define-values (matcher names)
-    (compile-pattern ellipsis
-                     (list (empty-wrap 'then))
+    (compile-pattern (list (empty-wrap 'then))
                      (vector (empty-wrap 'x)
                              ellipsis
                              (empty-wrap 'then)
                              (empty-wrap 'y))))
-  (let ((returned (matcher empty-map
-                           (vector 1 2 3 4 5
+  (let ((returned (matcher (vector 1 2 3 4 5
                                    (empty-wrap 'then)
                                    6))))
     (test-assert "matched" returned)

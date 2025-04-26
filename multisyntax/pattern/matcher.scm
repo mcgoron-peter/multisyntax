@@ -12,39 +12,79 @@
  | See the License for the specific language governing permissions and
  | limitations under the License.
  |------------------------------------------------------------------------
- | Syntax pattern matcher for syntax-rules and syntax-case.
- | The matcher is a backtracking recursive tracker.
+ | Backtracking recursive syntax pattern matcher for syntax-rules and
+ | syntax-case.
  |
- | The "compiler" turns the pattern into lambdas.
+ | The "compiler" returns:
  |
- | The map will return either `#f` (failure) or a map from identifiers to
- | either
- | 
- | 1. Syntax objects, or
- | 2. Reversed lists containined repeated matched values (for ellipsis
- |    patterns).
- |
- | The pattern matcher compiler outputs the nesting level of each
- | identifier, which allows a user to differentiate between lists and
- | ellipsis pattern values.
+ | 1. a procedure (the matcher) that will ake an input pattern and return
+ |    either `#f` or a hashmap from identifiers to "matched values".
+ | 2. a hashmap from identifiers to `(cons x y)`, where
+ |    `x` is the "ellipsis nesting level" and `y` is the "ellipsis group".
+ |    The hashmap checks identifier according to `bound-identifier=?`.
  |
  | The matcher is implemented as a recursive procedure that accumulates
- | the result map as it continues. When it encounters an ellipsis pattern,
- | the pattern P that the ellipsis pattern repeats is called with an empty
- | map. If the pattern P returns, the returned identifiers inside of that
- | pattern are inserted into the result map as elements of a listm and then
- | P is called again. This way, multiple values from an ellipsis can be
- | collected.
+ | the result map as it continues. When it encounters a template of the
+ | form `template ...` in a vector or a list, `template` is matched with
+ | an empty identifier hashmap. map. If `template` successfully matches,
+ | the returned identifiers inside of that pattern are inserted into the
+ | result map as elements of a list and then P is called again. This way,
+ | multiple values from an ellipsis can be collected.
+ |
+ |------------------------------------------------------------------------
+ | A "matched value" is defined as:
+ | 
+ | 1. A syntax object, or
+ | 2. Reversed lists containing matched values from a repeated match.
+ |    This occurs when an identifier has a non-zero ellipsis nesting level.
+ |
+ | A syntax object can also match a list. To disambiguate this, refer to
+ | the ellipsis nesting level of an identifier.
+ |
+ |------------------------------------------------------------------------
+ | The "ellipsis nesting level" of a syntax object is defined as:
+ |
+ | * The ellipsis nesting level of a syntax form passed to `compile-pattern`
+ |   is 0.
+ | * Whenever `template ...` is found in a list or a vector with
+ |   ellipsis nesting level N, then `template` has nesting level `N + 1`.
+ |
+ |  For example,
+ |
+ | 1. The ellipsis nesting level of `(x y z)` is 0.
+ | 2. The ellipsis nesting level of `(x ...)` is 0. Inside the form, the
+ |    nesting level of `x` is 1.
+ | 3. In `(let-values (((names ...) value) ...) body ...)`, the nesting
+ |    level of `names` is 2, of `value` 1, and of `body` 1.
+ |
+ |------------------------------------------------------------------------
+ | The "ellipsis group" is an integer with the property that whenever
+ | `template ...` is found in a pattern, all identifiers in `template` at
+ | the same nesting level have the same ellipsis group, and no other
+ | identifiers have the same ellipsis group.
+ |
+ |------------------------------------------------------------------------
+ | For an identifier with nesting level N, the result map at the end of
+ | matching will have N levels of lists. For example:
+ |
+ |     (let-values (((name1 name2) value1) ((name3 name4) value2)) body)
+ |
+ | Will map
+ |
+ |     names -> ((name4 name3) (name2 name1))
+ |     value -> (value2 value1)
+ |     body -> (body)
  |#
 
-#;(define (display-hashmap hashmap)
-  (display
-   (list
-    "hashmap:"
-    (map (lambda (pair)
-           (cons (syntax->datum (car pair))
-                 (cdr pair)))
-         (hashmap->alist hashmap)))))
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Auxillary parameters
+;;; 
+;;; These use the unportable `empty-wrap` procedure to create auxillary
+;;; syntax keywords (identifiers without timestamps and without an
+;;; environment).
+
+(define ... (empty-wrap '...))
+(define _ (empty-wrap '_))
 
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Parameter objects for the parser
@@ -58,8 +98,9 @@
   ;; Current ellipsis nesting level.
   (make-parameter 0))
 
-(define actual-ellipsis-container
-  ;; Parameter object that contains the ellipsis identifier.
+(define actual-ellipsis-procedure
+  ;; Parameter object that contains a procedure to determine if an
+  ;; identifier acts as the ellipsis.
   (make-parameter #f))
 
 (define literals-parameter
@@ -81,9 +122,13 @@
   ;; matches).
   (make-parameter #f))
 
+(define ellipsis-group
+  ;; Current ellipsis group.
+  (make-parameter #f))
+
 (define (call/nesting-level procedure . args)
   ;; Invoke (procedure args ...) with a higher nesting level and an empty
-  ;; `bound-here` set.
+  ;; `bound-here` map. Also creates a new ellipsis group.
   ;; 
   ;; Returns (values return map):
   ;; 
@@ -92,15 +137,14 @@
   ;;    default values (the empty list).
   (let ((old-bound-here-box (bound-here)))
     (parameterize ((nesting-level (+ (nesting-level) 1))
-                   (bound-here (box (empty-map))))
+                   (bound-here (box (empty-map)))
+                   (ellipsis-group (generate-unique-integer)))
       (let ((returned (apply procedure args)))
         (values returned (unbox (bound-here)))))))
 
 (define (actual-ellipsis? identifier)
   ;; Returns `#t` if `id` is an ellipsis, and `#f` otherwise.
-  (cond
-    ((actual-ellipsis-container) => (cut <> identifier))
-    (else #f)))
+  ((actual-ellipsis-procedure) identifier))
 
 (define (add-name! identifier)
   ;; Add `identifier` to the name map with the current ellipsis nesting
@@ -111,42 +155,86 @@
     (when (hashmap-contains? old identifier)
       (error "identifier bound twice" identifier))
     (when (bound-here)
-      (let ((the-set (unbox (bound-here))))
-        (set-box! (bound-here) (hashmap-set! the-set
-                                             identifier
-                                             '()))))
+      (set-box! (bound-here) (hashmap-set! (unbox (bound-here))
+                                           identifier
+                                           '())))
     (set-box! the-box (hashmap-set! old
                                     identifier
-                                    (nesting-level)))))
+                                    (cons (nesting-level)
+                                          (ellipsis-group))))))
 
-(define (compile-pattern ellipsis literals stx)
+(define (contains-as-free-identifier set key)
+  ;; Returns an identifier if `key` is `free-identifier=?` to any
+  ;; identifier in `set`. Otherwise return `#f`.
+  (cond
+    ((member key (set->list set) free-identifier=?) => car)
+    (else #f)))
+
+(define (generate-ellipsis-procedure literals ellipsis)
+  ;; Generates a procedure of one argument that returns `#t` if the
+  ;; argument is an ellipsis for the purposes of the current matcher.
+  ;; 
+  ;; If `ellipsis` is `#f`, then the `ellipsis` is the auxillary global
+  ;; `...`, and matching is done with `free-identifier=?`.
+  ;; 
+  ;; If `ellipsis` is some identifier, then matching is done against it
+  ;; with `bound-identifier=?`.
+  ;; 
+  ;; If either ellipsis is in the literals, then there is no repeating
+  ;; patterns and the returned procedure returns `#f`.
+  (define always-false-case
+    (lambda (identifier) #f))
+  (define matches-free-identifier
+    (lambda (identifier)
+      (and (identifier? identifier)
+           (free-identifier=? identifier ...))))
+  (define matches-passed-ellipsis
+    (lambda (identifier)
+      (and (identifier? identifier)
+           (bound-identifier=? identifier ...))))
+  (cond
+    ((and (not ellipsis)
+          (contains-as-free-identifier literals ...))
+     always-false-case)
+    ((not ellipsis) matches-free-identifier)
+    ((set-contains? literals ellipsis) always-false-case)
+    (else matches-passed-ellipsis)))
+
+(define compile-pattern
   ;; Compile `stx` into a pattern matcher with `ellipsis` as the ellipsis
   ;; identifier and the set of `literals`.
   ;; 
   ;; Returns two values, the binding map and the matcher, which is a
   ;; procedure `binding-map * syntax -> (or binding-map #f)`.
-  (set! literals
-        (cond
-          ((set? literals) literals)
-          ((null? literals) (set bound-identifier-comparator))
-          ((pair? literals)
-           (list->set bound-identifier-comparator literals))
-          (else (error "invalid literals" literals))))
-  (parameterize ((nesting-level 0)
-                 (actual-ellipsis-container
-                  (if (set-contains? literals ellipsis)
-                      #f
-                      (lambda (stx)
-                        (and (identifier? stx)
-                             (bound-identifier=? stx ellipsis)))))
-                 (literals-parameter literals)
-                 (bindings (box (empty-map))))
-    (let ((match (compile stx)))
-      (values match (unbox (bindings))))))
+  (case-lambda
+    ((literals stx) (compile-pattern literals stx #f))
+    ((literals stx ellipsis)
+     (let ((literals
+            (cond
+              ((set? literals) literals)
+              ((null? literals) (set bound-identifier-comparator))
+              ((pair? literals)
+               (list->set bound-identifier-comparator literals))
+              (else (error "invalid literals" literals)))))
+       (parameterize ((nesting-level 0)
+                      (actual-ellipsis-procedure
+                       (generate-ellipsis-procedure literals ellipsis))
+                      (literals-parameter literals)
+                      (bindings (box (empty-map))))
+         (let ((match (compile stx)))
+           (values (lambda (stx)
+                     (match (empty-map) stx))
+                   (unbox (bindings)))))))))
 
 ;;; ;;;;;;;;;;;;;;;;;;;;
 ;;; Helper functions
 ;;; ;;;;;;;;;;;;;;;;;;;;
+
+(define generate-unique-integer
+  (let ((i 0))
+    (lambda ()
+      (set! i (+ i 1))
+      i)))
 
 (define (empty-map)
   (hashmap bound-identifier-comparator))
@@ -185,11 +273,11 @@
       ((literal? pattern)
        (lambda (names stx)
          (and (identifier? stx)
-              (bound-identifier=? stx pattern)
+              (free-identifier=? stx pattern)
               names)))
       ((actual-ellipsis? pattern)
        (error "invalid ellipsis location" pattern))
-      ((bound-identifier=? pattern (empty-wrap '_))
+      ((free-identifier=? pattern _)
        (lambda (names stx) names))
       (else
        (add-name! pattern)
@@ -300,7 +388,6 @@
       #f))
 
 (define (compile-vector-ellipsis vec i match-rest)
-  ;; Compile the pattern in `vec` at `i` as an ellipsis pattern.
   (when (< i 0)
     (error "... is not allowed at the start of a vector" vec))
   (let ((cur (vector-ref vec i)))
@@ -322,7 +409,6 @@
             (else (match-rest names vec i))))))))
 
 (define (compile-pattern-in-vector pattern match-rest)
-  ;; Compile `pattern` to be matched in a vector.
   (define match (compile pattern))
   (lambda (names vec i)
     (cond
