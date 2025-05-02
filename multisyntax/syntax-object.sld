@@ -30,6 +30,7 @@
           ;; Operations on wraps
           generate-timestamp empty-wrap add-timestamp add-substitution
           wrap->timestamps resolve
+          identifier-lexically-bound?
           ;; Standard operations
           symbolic-identifier=? free-identifier=? bound-identifier=?
           identifier?

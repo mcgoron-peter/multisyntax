@@ -11,17 +11,12 @@
  | WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  | See the License for the specific language governing permissions and
  | limitations under the License.
+ |-----------------------------------------------
+ | Procedures shared by matcher and producer.
  |#
 
-(define-library (multisyntax pattern matcher)
-  (import (scheme base) (scheme write) (scheme case-lambda)
-          (srfi 26) (srfi 111) (srfi 113) (srfi 146 hash) (srfi 197)
-          (multisyntax utils) (multisyntax pattern internal)
-          (only (multisyntax syntax-object)
-                identifier? bound-identifier=? free-identifier=?
-                unwrap-syntax
-                ;; unportable extensions
-                self-syntax?
-                empty-wrap bound-identifier-comparator))
-  (export compile-pattern)
-  (include "matcher.scm"))
+(define-library (multisyntax pattern internal)
+  (import (scheme base) (srfi 113) (multisyntax syntax-object))
+  (export matcher-input
+          is-ellipsis-list actual-ellipsis? literal?)
+  (include "internal.scm"))

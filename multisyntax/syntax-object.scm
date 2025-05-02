@@ -13,6 +13,23 @@
  | limitations under the License.
  |------------------------------------------------------------------------
  | Hygenic syntax transformer based on Dybvig, Hieb, and Bruggeman 1992.
+ | "Syntax objects" are Scheme data that contain a set of "marks" and
+ | "substitutions," also called "timestamps" and a "lexical environment."
+ |
+ | Marks are used to color data that is returned by syntax transformers
+ | that was not part of the input of the transformer. Substitutions are
+ | used to lazy convert bound identifiers into new bound identifiers.
+ |
+ | This library implements Chapter 3 of the Macrological Fascicle.
+ | Whats missing?
+ |
+ | * A full implementation of `identifier-defined?`, `define-property`, and
+ |   `identifier-properties`, because global scope is not stored inside of
+ |   the syntax object address store.
+ |   For hosted systems, use a hashmap with `bound-identifier-comparator`.
+ |   A hashmap has better garbage collection properties.
+ | * Macros like `quote-syntax`, because they would be difficult to write
+ |   purely in `syntax-rules`.
  |#
 
 ;;; ;;;;;;;;;;
@@ -46,7 +63,8 @@
    (lambda (x) (number-hash (lexical-location->unique-id x)))))
 
 (define (generate-lexical-location symbol)
-  (raw-lexical-location symbol (generate-unique-integer)))
+  (raw-lexical-location symbol
+                        (generate-unique-integer)))
 
 (define (lexical-location->string ll)
   (string-append (symbol->string (lexical-location->symbol ll))
