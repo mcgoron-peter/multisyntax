@@ -67,7 +67,11 @@
  |
  |------------------------------------------------------------------------
  | For an identifier with nesting level N, the result map at the end of
- | matching will have N levels of lists. For example:
+ | matching will have N levels of lists. For example, the pattern
+ |
+ |     (let-values (((name ...) value) ...) body ...)
+ |
+ | with input
  |
  |     (let-values (((name1 name2) value1) ((name3 name4) value2)) body)
  |
@@ -196,9 +200,6 @@
 ;;; ;;;;;;;;;;;;;;;;;;;;
 ;;; Helper functions
 ;;; ;;;;;;;;;;;;;;;;;;;;
-
-(define (empty-map)
-  (hashmap bound-identifier-comparator))
 
 (define (merge-names oldnames newnames)
   ;; newnames is the patterns matched in an ellipsis expression. Append

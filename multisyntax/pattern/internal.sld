@@ -17,6 +17,6 @@
 
 (define-library (multisyntax pattern internal)
   (import (scheme base) (srfi 113) (multisyntax syntax-object))
-  (export matcher-input
-          is-ellipsis-list actual-ellipsis? literal?)
+  (export matcher-input is-ellipsis-list actual-ellipsis? literal?
+          empty-map)
   (include "internal.scm"))

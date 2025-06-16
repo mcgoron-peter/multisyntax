@@ -81,20 +81,21 @@
   ;; The values of the parameter is a vector #(ellipsis-procedure literals),
   ;; where `ellipsis-procedure` is a procedure of one argument that returns
   ;; true if the passed argument is a real ellipsis and 0 otherwise. The
-  ;; value `literals` is a set of literals, disambiguated by `bound-identifier=?`.
-  (make-parameter #f
-                  (lambda (inputs)
-                    (if inputs
-                        (let ((literals-set
-                               (convert-to-literals-set
-                                (vector-ref inputs 1))))
-                          (vector (generate-ellipsis-procedure
-                                   (cond
-                                     ((vector-ref inputs 0) => values)
-                                     (else ...))
-                                   literals-set)
-                                  literals-set))
-                        #f))))
+  ;; value `literals` is a set of literals, disambiguated by
+  ;; `bound-identifier=?`.
+  (let ()
+    (define (transformer inputs)
+      (and inputs
+           (let ((literals-set
+                  (convert-to-literals-set
+                   (vector-ref inputs 1))))
+             (vector (generate-ellipsis-procedure
+                      (cond
+                        ((vector-ref inputs 0) => values)
+                        (else ...))
+                      literals-set)
+                     literals-set))))
+    (make-parameter #f transformer)))
 
 (define (ellipsis-procedure)
   (vector-ref (matcher-input) 0))
@@ -118,3 +119,7 @@
 
 (define (literal? identifier)
   (set-contains? (literals) identifier))
+
+(define (empty-map)
+  (hashmap bound-identifier-comparator))
+

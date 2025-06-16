@@ -108,6 +108,13 @@
 ;;; to do the actual macro expansion. This still results in linear
 ;;; time complexity, but with a larger constant.
 ;;; 
+;;; IDEA: Currently the entire algorithm is persistent. One could give up
+;;; persistence and do eager wrap propagation using mutation. This means that
+;;; the input no longer has to be scanned. This would make the additional
+;;; growth linear in the size of introduced identifiers that have not been
+;;; reached yet. This would help in cases where introduced identifiers are
+;;; very far down the tree.
+;;; 
 ;;; The direct-implementation has the property that no eager wrap
 ;;; propagation must be done. However, it requires linear behavior for the
 ;;; set of marks and substitutions. This would make the expander very slow
