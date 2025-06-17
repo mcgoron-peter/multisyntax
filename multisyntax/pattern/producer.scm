@@ -108,16 +108,17 @@
   (define (add-appearance! id)
     (set! appearances (set-adjoin appearances id)))
   (define (appears? id)
-    (set-member? appearances id))
+    (set-contains? appearances id))
   (define (add-temporary! id)
     (let ((new (generate-identifier (syntax->datum id))))
-      (set! bindings (mapping-adjoin bindings
+      (set! bindings (hashmap-adjoin bindings
                                      new
-                                     (mapping-ref bindings id)))
+                                     (hashmap-ref bindings id)))
       new))
   (define (rewrite pattern)
     (let ((pattern (unwrap-syntax pattern)))
       (cond
+        ((self-syntax? pattern) pattern)
         ((pair? pattern) (cons (rewrite (car pattern))
                                (rewrite (cdr pattern))))
         ((vector? pattern) (vector-map rewrite pattern))
@@ -143,23 +144,27 @@
 
 (define all-bindings (make-parameter #f))
 
-(define (compile-producer literals pattern %bindings ellipsis)
+(define compile-producer
   ;; Enty point into the producer compiler.
   ;; 
   ;; This will rewrite the producer so that each bound identifier is used
   ;; at most once.
-  (parameterize ((matcher-input (vector ellipsis literals)))
-    (let-values (((pattern %bindings)
-                  (rewrite/temporaries pattern %bindings)))
-      (parameterize ((PNL 0)
-                     (bindings %bindings))
-        (let-values (((producer open-bindings)
-                      (compile pattern)))
-          (if (not (hashmap-empty? open-bindings))
-              (error "pattern not closed" pattern)
-              (lambda (bindings)
-                (parameterize ((all-bindings bindings))
-                  (producer bindings)))))))))
+  (case-lambda
+    ((literals pattern %bindings)
+     (compile-producer literals pattern %bindings #f))
+    ((literals pattern %bindings ellipsis)
+     (parameterize ((matcher-input (vector ellipsis literals)))
+       (let-values (((pattern %bindings)
+                     (rewrite/temporaries pattern %bindings)))
+         (parameterize ((PNL 0)
+                        (bindings %bindings))
+           (let-values (((producer open-bindings)
+                         (compile pattern)))
+             (if (not (hashmap-empty? open-bindings))
+                 (error "pattern not closed" pattern)
+                 (lambda (bindings)
+                   (parameterize ((all-bindings bindings))
+                     (producer bindings)))))))))))
 
 (define (compile pattern)
   ;; Returns a procedure that will produce `pattern` given the bindings.
@@ -177,9 +182,12 @@
       ((literal? pattern)
        (values (lambda (bindings) pattern)
                (empty-map)))
+      ((and (identifier? pattern)
+            (hashmap-contains? (bindings) pattern))
+       (values (lambda (bindings) (hashmap-ref bindings pattern))
+               (hashmap bound-identifier-comparator pattern (PNL))))
       ((identifier? pattern)
-       (values (lambda (bindings) (hashtable-ref bindings pattern))
-               (hashmap bound-element-comparator pattern (PNL))))
+       (values (lambda (bindings) pattern) (empty-map)))
       (else (error "not syntax" pattern)))))
 
 ;;; ;;;;;;;;;
@@ -208,9 +216,9 @@
           (values
            (lambda (bindings)
              (cons (produce-car bindings) (produce-next bindings)))
-           (mapping-union open-identifiers open-identifiers-next)))
+           (hashmap-union open-identifiers open-identifiers-next)))
         (let-values (((produce-in-ellipsis open-identifiers-of)
-                      (compile-in-list-ellipsis patcar)))
+                      (produce-ellipsis-list number-of-ellipses patcar)))
           (if (hashmap-empty? open-identifiers-of)
               (values
                ;; If the ellipses binding is completely closed, then pass
@@ -224,7 +232,7 @@
                (lambda (bindings)
                  (append (produce-in-ellipsis bindings)
                          (produce-next bindings)))
-               (mapping-union open-identifiers
+               (hashmap-union open-identifiers-of
                               open-identifiers-next)))))))
 
 ;;; The following prodcures are related to "iterator" maps, which are the
@@ -233,7 +241,7 @@
 (define (length+reverse list)
   (let loop ((i 0)
              (list list)
-             (acc 0))
+             (acc '()))
     (if (null? list)
         (values i acc)
         (loop (+ i 1) (cdr list) (cons (car list) acc)))))
@@ -245,7 +253,7 @@
   (define length-of-each #f)
   (hashmap-map
    (lambda (open-identifier _)
-     (let*-values (((rev-bound) (mapping-ref bindings open-identifier))
+     (let*-values (((rev-bound) (hashmap-ref bindings open-identifier))
                    ((length bound) (length+reverse rev-bound)))
        (cond
          ((not length-of-each)
@@ -263,8 +271,8 @@
 (define (next-binding open-bindings)
   ;; Returns a map of open identifiers that points to the next bound values
   ;; to output.
-  (hashmap-map (lambda (identifier values)
-                 (values identifier (cdr values)))
+  (hashmap-map (lambda (identifier list)
+                 (values identifier (cdr list)))
                bound-identifier-comparator
                open-bindings))
 
@@ -272,8 +280,8 @@
   ;; Return a map of bindings, where the open identifiers are assigned the
   ;; current bound value in iteration.
   (hashmap-union
-   (hashmap-map (lambda (open-identifier values)
-                  (values open-identifier (car values)))
+   (hashmap-map (lambda (open-identifier list)
+                  (values open-identifier (car list)))
                 bound-identifier-comparator
                 open-identifiers-map)
    bindings))
@@ -294,8 +302,8 @@
                 ((open-identifiers-to-return)
                  ;; Remove identifiers which that will become closed after
                  ;; exiting the ellipses.
-                 (hashmap-delete will-be-closed? open-identifiers)))
-    (when (null? all-open-identifiers)
+                 (hashmap-remove will-be-closed? open-identifiers)))
+    (when (null? open-identifiers)
       (error "ellipsis production does not have open identifiers" patcar))
     (values (lambda (bindings)
               (do ((iterated (open-bindings open-identifiers bindings)

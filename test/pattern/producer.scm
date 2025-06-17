@@ -11,13 +11,17 @@
  | WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  | See the License for the specific language governing permissions and
  | limitations under the License.
- |-----------------------------------------------
- | Procedures shared by matcher and producer.
  |#
 
-(define-library (multisyntax pattern internal)
-  (import (scheme base) (srfi 113) (srfi 146 hash)
-          (multisyntax syntax-object))
-  (export matcher-input is-ellipsis-list actual-ellipsis? literal?
-          empty-map)
-  (include "internal.scm"))
+(define (test-producers)
+  (let ((producer
+         (compile-producer '()
+                           (list (empty-wrap 'x) (empty-wrap '...))
+                           (hashmap bound-identifier-comparator
+                                    (empty-wrap 'x)
+                                    1))))
+    (test-equal "produces x = '(5 4 3 2 1)"
+                '(1 2 3 4 5)
+                (producer (hashmap bound-identifier-comparator
+                                   (empty-wrap 'x)
+                                   '(5 4 3 2 1))))))

@@ -11,13 +11,15 @@
  | WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  | See the License for the specific language governing permissions and
  | limitations under the License.
- |-----------------------------------------------
- | Procedures shared by matcher and producer.
  |#
 
-(define-library (multisyntax pattern internal)
-  (import (scheme base) (srfi 113) (srfi 146 hash)
-          (multisyntax syntax-object))
-  (export matcher-input is-ellipsis-list actual-ellipsis? literal?
-          empty-map)
-  (include "internal.scm"))
+(define-library (multisyntax pattern producer test)
+  (import (scheme base) (scheme write) (srfi 113) (srfi 146 hash)
+          (multisyntax syntax-object)
+          (multisyntax pattern producer))
+  (cond-expand
+    (chicken (import (srfi 64)
+                     (chicken condition)))
+    (else))
+  (export test-producers)
+  (include "producer.scm"))
