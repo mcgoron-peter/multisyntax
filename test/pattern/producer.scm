@@ -30,6 +30,13 @@
   (let ((producer (compile-producer '() #\a '())))
     (test-equal "char" #\a (producer (idmap)))))
 
+(define (test-regular-lists)
+  (let ((producer (compile-producer '() (list 1 2 3 4) '())))
+    (test-equal "(1 2 3 4)" (producer (idmap))))
+  (let ((producer (compile-producer '() (list (empty-wrap 'x))
+                                    (idmap (empty-wrap 'x) 0))))
+    (test-equal "(x)" '(0) (producer (idmap (empty-wrap 'x) 0)))))
+
 (define (test-list-ellipses)
   (let ((producer
          (compile-producer '()
@@ -72,7 +79,35 @@
                 2
                 (length got))
       (test-eqv "first value is 0" 0 (car got))
-      (test-assert "second value" (bound-identifier=? (cadr got) (empty-wrap '...))))))
+      (test-assert "second value" (bound-identifier=? (cadr got) (empty-wrap '...)))))
+  (test-group "(let-values (((names ...) value ...) ...) body ...)"
+    (let* ((producer
+            (compile-producer '()
+                              (list (empty-wrap 'let-values)
+                                    (list (list (list (empty-wrap 'names)
+                                                      (empty-wrap '...))
+                                                (empty-wrap 'values))
+                                          (empty-wrap '...))
+                                    (empty-wrap 'body)
+                                    (empty-wrap '...))
+                              (idmap (empty-wrap 'let-values) 0
+                                     (empty-wrap 'names) 2
+                                     (empty-wrap 'values) 1
+                                     (empty-wrap 'body) 1)))
+           (got (producer (idmap (empty-wrap 'names)
+                                 '((0 1) (2 3) (4 5) (6 7))
+                                 (empty-wrap 'values)
+                                 '(100 200 300 400)
+                                 (empty-wrap 'body)
+                                 '(600 700 800 900)
+                                 (empty-wrap 'let-values)
+                                 1000))))
+      (test-equal '(1000 (((7 6) 400)
+                          ((5 4) 300)
+                          ((3 2) 200)
+                          ((1 0) 100))
+                         900 800 700 600)
+                  got))))
 
 (define (test-producers)
   (test-group "producers"
