@@ -147,9 +147,43 @@
                   (producer (idmap (empty-wrap 'x)
                                    '((4 3) (2 1))))))))
 
+(define (test-vector)
+  (let ((producer
+         (compile-producer '()
+                           (vector 1 2 3 4)
+                           (idmap))))
+    (test-equal "#(1 2 3 4)"
+                #(1 2 3 4)
+                (producer (idmap))))
+  (let ((producer
+         (compile-producer '()
+                           (vector (empty-wrap 'x) (empty-wrap 'y))
+                           (idmap (empty-wrap 'x) 0
+                                  (empty-wrap 'y) 0))))
+    (test-equal "#(x y)"
+                #(10 20)
+                (producer (idmap (empty-wrap 'x) 10
+                                 (empty-wrap 'y) 20))))
+  (let ((producer
+         (compile-producer '()
+                           (vector (empty-wrap 'x) (empty-wrap '...))
+                           (idmap (empty-wrap 'x) 1))))
+    (test-equal "#(x ...)"
+                #(10 20 30)
+                (producer (idmap (empty-wrap 'x) '(30 20 10)))))
+  (let ((producer
+         (compile-producer '()
+                           (vector (empty-wrap 'x) (empty-wrap '...) 100)
+                           (idmap (empty-wrap 'x) 1))))
+    (test-equal "#(x ... 100)"
+                #(80 90 100)
+                (producer (idmap (empty-wrap 'x) '(90 80))))))
+
 (define (test-producers)
   (test-group "producers"
     (test-group "self-syntax"
       (test-self-syntax))
     (test-group "list ellipses"
-      (test-list-ellipses))))
+      (test-list-ellipses))
+    (test-group "vector patterns"
+      (test-vector))))

@@ -194,7 +194,7 @@
       ((pair? pattern) (compile-pair (unwrap-syntax (car pattern))
                                      (unwrap-syntax (cdr pattern))))
       ;; TODO: Vectors
-      #;((vector? pattern) (compile-vector pattern))
+      ((vector? pattern) (compile-vector pattern))
       ((actual-ellipsis? pattern)
        (error "ellipsis in location where it is not allowed" pattern))
       ((literal? pattern)
@@ -213,6 +213,17 @@
       ((identifier? pattern)
        (values (lambda (bindings) pattern) (empty-map)))
       (else (error "not syntax" pattern)))))
+
+;;; ;;;;;;;;;;;;;;;
+;;; Vectors
+
+(define (compile-vector pattern)
+  (let*-values (((as-list) (vector->list pattern))
+                ((produce-as-list open-identifiers)
+                 (compile-regular-pair (unwrap-syntax (car as-list))
+                                       (unwrap-syntax (cdr as-list)))))
+    (values (lambda (bindings) (list->vector (produce-as-list bindings)))
+            open-identifiers)))
 
 ;;; ;;;;;;;;;
 ;;; Lists
