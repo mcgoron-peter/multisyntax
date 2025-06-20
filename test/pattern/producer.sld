@@ -15,6 +15,7 @@
 
 (define-library (multisyntax pattern producer test)
   (import (scheme base) (scheme write) (srfi 113) (srfi 146 hash)
+          (srfi 1)
           (multisyntax syntax-object)
           (multisyntax pattern producer))
   (cond-expand

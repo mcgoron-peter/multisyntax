@@ -80,6 +80,19 @@
                 (length got))
       (test-eqv "first value is 0" 0 (car got))
       (test-assert "second value" (bound-identifier=? (cadr got) (empty-wrap '...)))))
+  (test-group "(x ... y ... z ...)"
+    (let ((producer
+           (compile-producer '()
+                             (list (empty-wrap 'x) (empty-wrap '...)
+                                   (empty-wrap 'y) (empty-wrap '...)
+                                   (empty-wrap 'z) (empty-wrap '...))
+                             (idmap (empty-wrap 'x) 1
+                                    (empty-wrap 'y) 1
+                                    (empty-wrap 'z) 1))))
+      (test-equal '(1 2 3 10 20 30 100 200 300)
+                  (producer (idmap (empty-wrap 'x) '(3 2 1)
+                                   (empty-wrap 'y) '(30 20 10)
+                                   (empty-wrap 'z) '(300 200 100))))))
   (test-group "(let-values (((names ...) value ...) ...) body ...)"
     (let* ((producer
             (compile-producer '()
@@ -139,8 +152,8 @@
     ;; should emulate Chez's output.
     (let* ((pat
             (list (list (list (empty-wrap 'x)
-                             (list (empty-wrap 'x) (empty-wrap '...)))
-                       (empty-wrap '...))
+                              (list (empty-wrap 'x) (empty-wrap '...)))
+                        (empty-wrap '...))
                   (empty-wrap '...)))
            (producer (compile-producer '() pat (idmap (empty-wrap 'x) 2))))
       (test-equal '(((1 (1 2)) (2 (3 4))) ((3 (1 2)) (4 (3 4))))
@@ -179,6 +192,28 @@
                 #(80 90 100)
                 (producer (idmap (empty-wrap 'x) '(90 80))))))
 
+(define (test-improper-list)
+  (let ((producer
+         (compile-producer '()
+                           (cons (empty-wrap 'x) (empty-wrap 'y))
+                           (idmap (empty-wrap 'x) 0
+                                  (empty-wrap 'y) 0))))
+    (test-equal "(x . y)"
+                '(10 . 20)
+                (producer (idmap (empty-wrap 'x) 10
+                                 (empty-wrap 'y) 20))))
+  (let ((producer
+         (compile-producer '()
+                           (cons* (empty-wrap 'x)
+                                  (empty-wrap '...)
+                                  (empty-wrap 'y))
+                           (idmap (empty-wrap 'x) 1
+                                  (empty-wrap 'y) 0))))
+    (test-equal "(x ... . y)"
+                '(1 2 3 4 5 . 0)
+                (producer (idmap (empty-wrap 'x) '(5 4 3 2 1)
+                                 (empty-wrap 'y) 0)))))
+
 (define (test-producers)
   (test-group "producers"
     (test-group "self-syntax"
@@ -186,4 +221,6 @@
     (test-group "list ellipses"
       (test-list-ellipses))
     (test-group "vector patterns"
-      (test-vector))))
+      (test-vector))
+    (test-group "improper list"
+      (test-improper-list))))
