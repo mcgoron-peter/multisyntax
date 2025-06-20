@@ -15,36 +15,52 @@
 
 (define (test-producers)
   (let ((producer
-           (compile-producer '()
-                             (list (empty-wrap 'x) (empty-wrap '...))
-                             (hashmap bound-identifier-comparator
-                                      (empty-wrap 'x)
-                                      1))))
-      (test-equal "produces x = '(5 4 3 2 1)"
-                  '(1 2 3 4 5)
-                  (producer (hashmap bound-identifier-comparator
-                                     (empty-wrap 'x)
-                                     '(5 4 3 2 1)))))
+         (compile-producer '()
+                           (list (empty-wrap 'x) (empty-wrap '...))
+                           (hashmap bound-identifier-comparator
+                                    (empty-wrap 'x)
+                                    1))))
+    (test-equal "x ..."
+                '(1 2 3 4 5)
+                (producer (hashmap bound-identifier-comparator
+                                   (empty-wrap 'x)
+                                   '(5 4 3 2 1)))))
   (let ((producer
-           (compile-producer '()
-                             (list (list (empty-wrap 'x) (empty-wrap '...))
-                                   (empty-wrap '...))
-                             (hashmap bound-identifier-comparator
-                                      (empty-wrap 'x)
-                                      2))))
-      (test-equal "double ellipsis"
-                  '((1 2) (3 4) (5 6) (7 8))
-                  (producer (hashmap bound-identifier-comparator
-                                     (empty-wrap 'x)
-                                     '((8 7) (6 5) (4 3) (2 1))))))
+         (compile-producer '()
+                           (list (list (empty-wrap 'x) (empty-wrap '...))
+                                 (empty-wrap '...))
+                           (hashmap bound-identifier-comparator
+                                    (empty-wrap 'x)
+                                    2))))
+    (test-equal "(x ...) ..."
+                '((1 2) (3 4) (5 6) (7 8))
+                (producer (hashmap bound-identifier-comparator
+                                   (empty-wrap 'x)
+                                   '((8 7) (6 5) (4 3) (2 1))))))
   (let ((producer
          (compile-producer '()
                            (list (empty-wrap 'x) (empty-wrap '...) (empty-wrap '...))
                            (hashmap bound-identifier-comparator
                                     (empty-wrap 'x)
                                     2))))
-    (test-equal "appended double ellipsis"
+    (test-equal "x ... ..."
                 '(1 2 3 4 5 6 7 8)
                 (producer (hashmap bound-identifier-comparator
                                    (empty-wrap 'x)
-                                   '((8 7) (6 5) (4 3) (2 1)))))))
+                                   '((8 7) (6 5) (4 3) (2 1))))))
+  (test-group "(... (x ...))"
+    (let* ((producer
+            (compile-producer '()
+                              (list (empty-wrap '...) (list (empty-wrap 'x) (empty-wrap '...)))
+                              (hashmap bound-identifier-comparator
+                                       (empty-wrap 'x)
+                                       0)))
+           (got (producer (hashmap bound-identifier-comparator
+                                   (empty-wrap 'x)
+                                   0))))
+      (test-assert "returned a list" (list? got))
+      (test-eqv "returned the correct length"
+                2
+                (length got))
+      (test-eqv "first value is 0" 0 (car got))
+      (test-assert "second value" (bound-identifier=? (cadr got) (empty-wrap '...))))))

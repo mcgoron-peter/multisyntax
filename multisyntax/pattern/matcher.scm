@@ -148,7 +148,8 @@
         (outer-ellipsis-group (ellipsis-group)))
     (parameterize ((nesting-level (+ (nesting-level) 1))
                    (bound-here (box (empty-map)))
-                   (ellipsis-group (generate-unique-integer)))
+                   (ellipsis-group (generate-unique-integer))
+                   (disable-ellipsis? #f))
       (when outer-ellipsis-group
         (set-parameter! ellipsis-group-map
                         (cute hashmap-update!/default

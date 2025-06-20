@@ -19,5 +19,5 @@
   (import (scheme base) (srfi 113) (srfi 146 hash)
           (multisyntax syntax-object))
   (export matcher-input is-ellipsis-list actual-ellipsis? literal?
-          empty-map)
+          empty-map disable-ellipsis?)
   (include "internal.scm"))

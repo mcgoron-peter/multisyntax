@@ -98,13 +98,21 @@
     (make-parameter #f transformer)))
 
 (define (ellipsis-procedure)
+  ;; Returns the predicate that will check if its first argument is the
+  ;; ellipsis identifier.
   (vector-ref (matcher-input) 0))
 
-(define (literals) (vector-ref (matcher-input) 1))
+(define (literals)
+  ;; Returns the set of literals in dynamic scope.
+  (vector-ref (matcher-input) 1))
+
+(define disable-ellipsis? (make-parameter #f))
 
 (define (actual-ellipsis? identifier)
   ;; Returns `#t` if `id` is an ellipsis, and `#f` otherwise.
-  ((ellipsis-procedure) identifier))
+  (if (disable-ellipsis?)
+      #f
+      ((ellipsis-procedure) identifier)))
 
 (define (is-ellipsis-list patcdr)
   ;; Returns (values has-ellipsis? next). `has-ellipsis?` is true if the

@@ -148,7 +148,8 @@
     ((literals pattern %bindings)
      (compile-producer literals pattern %bindings #f))
     ((literals pattern %bindings ellipsis)
-     (parameterize ((matcher-input (vector ellipsis literals)))
+     (parameterize ((matcher-input (vector ellipsis literals))
+                    (disable-ellipsis? #f))
        (let-values (((pattern %bindings)
                      (rewrite/temporaries pattern %bindings)))
          (parameterize ((bindings %bindings))
@@ -177,11 +178,15 @@
        (values (lambda (bindings) pattern)
                (empty-map)))
       ((and (identifier? pattern)
-            (hashmap-contains? (bindings) pattern))
-       ;; Return 0 as the PNL of this identifier, because all identifiers
-       ;; have a PNL of 0 to themselves.
-       (values (lambda (bindings) (hashmap-ref bindings pattern))
-               (hashmap bound-identifier-comparator pattern 0)))
+            (hashmap-ref/default (bindings) pattern #f))
+       =>
+       (lambda (PNL)
+         (let ((returned (if (zero? PNL)
+                             (empty-map)
+                             (hashmap bound-identifier-comparator pattern 0))))
+           (values (lambda (bindings)
+                     (hashmap-ref bindings pattern))
+                   returned))))
       ((identifier? pattern)
        (values (lambda (bindings) pattern) (empty-map)))
       (else (error "not syntax" pattern)))))
@@ -196,7 +201,6 @@
   (let loop ((i 0)
              (patcdr patcdr))
     (cond
-      ((null? patcdr) (values i patcdr))
       ((not (pair? patcdr)) (values i patcdr))
       (else
        (let ((patcar (unwrap-syntax (car patcdr))))
@@ -205,10 +209,23 @@
              (values i patcdr)))))))
 
 (define (compile-pair patcar patcdr)
+  (cond
+    ((actual-ellipsis? patcar)
+     (if (not (pair? patcdr))
+         (error "not a pair" patcdr)
+         (let ((patcddr (unwrap-syntax (cdr patcdr)))
+               (patcadr (unwrap-syntax (car patcdr))))
+           (if (not (null? patcddr))
+               (error "invalid form of (... <template>)" patcar patcdr)
+               (parameterize ((disable-ellipsis? #t))
+                 (compile patcadr))))))
+    (else (compile-regular-pair patcar patcdr))))
+
+(define (compile-regular-pair patcar patcdr)
   (let*-values (((number-of-ellipses next) (list-of-ellipses patcdr))
                 ((produce-next open-identifiers-next) (compile next)))
     (if (zero? number-of-ellipses)
-        (let-values (((produce-car open-identifiers) (compile next)))
+        (let-values (((produce-car open-identifiers) (compile patcar)))
           (values
            (lambda (bindings)
              (cons (produce-car bindings) (produce-next bindings)))
@@ -309,11 +326,6 @@
                  (hashmap-remove will-be-closed? open-identifiers)))
     (when (hashmap-empty? open-identifiers)
       (error "ellipsis production does not have open identifiers" patcar))
-    ;; TODO: Need to handle the case of sequential ellipses. They are
-    ;; equivalent to
-    ;;     x ... ... => {append ((x ...) ...)}
-    ;;     x ... ... ... => {append {append (((x ...) ...) ...)}}
-    ;; and so on where `append` is meta-level.
     (letrec ((iterate
               (lambda (bindings acc level)
                 (if (= level number-of-ellipses)
