@@ -14,7 +14,7 @@
  |#
 
 (define (test-producers)
-  #;(let ((producer
+  (let ((producer
            (compile-producer '()
                              (list (empty-wrap 'x) (empty-wrap '...))
                              (hashmap bound-identifier-comparator
@@ -23,17 +23,28 @@
       (test-equal "produces x = '(5 4 3 2 1)"
                   '(1 2 3 4 5)
                   (producer (hashmap bound-identifier-comparator
-                                   (empty-wrap 'x)
-                                   '(5 4 3 2 1)))))
+                                     (empty-wrap 'x)
+                                     '(5 4 3 2 1)))))
+  (let ((producer
+           (compile-producer '()
+                             (list (list (empty-wrap 'x) (empty-wrap '...))
+                                   (empty-wrap '...))
+                             (hashmap bound-identifier-comparator
+                                      (empty-wrap 'x)
+                                      2))))
+      (test-equal "double ellipsis"
+                  '((1 2) (3 4) (5 6) (7 8))
+                  (producer (hashmap bound-identifier-comparator
+                                     (empty-wrap 'x)
+                                     '((8 7) (6 5) (4 3) (2 1))))))
   (let ((producer
          (compile-producer '()
-                           (list (list (empty-wrap 'x) (empty-wrap '...))
-                                 (empty-wrap '...))
+                           (list (empty-wrap 'x) (empty-wrap '...) (empty-wrap '...))
                            (hashmap bound-identifier-comparator
                                     (empty-wrap 'x)
                                     2))))
-    (test-equal "double ellipsis"
-                '((1 2) (3 4) (5 6) (7 8))
+    (test-equal "appended double ellipsis"
+                '(1 2 3 4 5 6 7 8)
                 (producer (hashmap bound-identifier-comparator
                                    (empty-wrap 'x)
                                    '((8 7) (6 5) (4 3) (2 1)))))))

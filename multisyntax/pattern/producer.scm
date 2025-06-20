@@ -314,13 +314,20 @@
     ;;     x ... ... => {append ((x ...) ...)}
     ;;     x ... ... ... => {append {append (((x ...) ...) ...)}}
     ;; and so on where `append` is meta-level.
-    (values (lambda (bindings)
-              (do ((iterated (open-bindings open-identifiers bindings)
-                             (next-binding iterated))
-                   (patterns (list-accumulator)))
-                  ((bindings-finished? iterated)
-                   (patterns (eof-object)))
-                (let ((subbindings (union/current-bindings bindings
-                                                           iterated)))
-                  (patterns (produce-part subbindings)))))
-            open-identifiers-to-return)))
+    (letrec ((iterate
+              (lambda (bindings acc level)
+                (if (= level number-of-ellipses)
+                    (acc (produce-part bindings))
+                    (do ((iterated (open-bindings open-identifiers bindings)
+                                   (next-binding iterated)))
+                        ((bindings-finished? iterated))
+                      (let ((subbindings (union/current-bindings bindings
+                                                                 iterated)))
+                        (iterate subbindings
+                                 acc
+                                 (+ level 1))))))))
+      (values (lambda (bindings)
+                (let ((patterns (list-accumulator)))
+                  (iterate bindings patterns 0)
+                  (patterns (eof-object))))
+              open-identifiers-to-return))))
