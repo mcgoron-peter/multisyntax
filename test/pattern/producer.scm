@@ -14,14 +14,26 @@
  |#
 
 (define (test-producers)
+  #;(let ((producer
+           (compile-producer '()
+                             (list (empty-wrap 'x) (empty-wrap '...))
+                             (hashmap bound-identifier-comparator
+                                      (empty-wrap 'x)
+                                      1))))
+      (test-equal "produces x = '(5 4 3 2 1)"
+                  '(1 2 3 4 5)
+                  (producer (hashmap bound-identifier-comparator
+                                   (empty-wrap 'x)
+                                   '(5 4 3 2 1)))))
   (let ((producer
          (compile-producer '()
-                           (list (empty-wrap 'x) (empty-wrap '...))
+                           (list (list (empty-wrap 'x) (empty-wrap '...))
+                                 (empty-wrap '...))
                            (hashmap bound-identifier-comparator
                                     (empty-wrap 'x)
-                                    1))))
-    (test-equal "produces x = '(5 4 3 2 1)"
-                '(1 2 3 4 5)
+                                    2))))
+    (test-equal "double ellipsis"
+                '((1 2) (3 4) (5 6) (7 8))
                 (producer (hashmap bound-identifier-comparator
                                    (empty-wrap 'x)
-                                   '(5 4 3 2 1))))))
+                                   '((8 7) (6 5) (4 3) (2 1)))))))

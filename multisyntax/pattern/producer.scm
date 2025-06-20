@@ -133,11 +133,6 @@
   (let ((pattern (rewrite pattern)))
     (values pattern bindings)))
 
-(define PNL
-  ;; The current producer nesting level relative to the whole producer.
-  ;; Must be an integer.
-  (make-parameter #f))
-
 (define bindings
   ;; Mapping bound identifiers to their real nesting level.
   (make-parameter #f))
@@ -156,8 +151,7 @@
      (parameterize ((matcher-input (vector ellipsis literals)))
        (let-values (((pattern %bindings)
                      (rewrite/temporaries pattern %bindings)))
-         (parameterize ((PNL 0)
-                        (bindings %bindings))
+         (parameterize ((bindings %bindings))
            (let-values (((producer open-bindings)
                          (compile pattern)))
              (if (not (hashmap-empty? open-bindings))
@@ -184,8 +178,10 @@
                (empty-map)))
       ((and (identifier? pattern)
             (hashmap-contains? (bindings) pattern))
+       ;; Return 0 as the PNL of this identifier, because all identifiers
+       ;; have a PNL of 0 to themselves.
        (values (lambda (bindings) (hashmap-ref bindings pattern))
-               (hashmap bound-identifier-comparator pattern (PNL))))
+               (hashmap bound-identifier-comparator pattern 0)))
       ((identifier? pattern)
        (values (lambda (bindings) pattern) (empty-map)))
       (else (error "not syntax" pattern)))))
@@ -271,10 +267,11 @@
 (define (next-binding open-bindings)
   ;; Returns a map of open identifiers that points to the next bound values
   ;; to output.
-  (hashmap-map (lambda (identifier list)
-                 (values identifier (cdr list)))
-               bound-identifier-comparator
-               open-bindings))
+  (let ((returned (hashmap-map (lambda (identifier list)
+                                 (values identifier (cdr list)))
+                               bound-identifier-comparator
+                               open-bindings)))
+    returned))
 
 (define (union/current-bindings bindings open-identifiers-map)
   ;; Return a map of bindings, where the open identifiers are assigned the
@@ -288,28 +285,41 @@
 
 (define (bindings-finished? bindings)
   ;; Returns true if there are no more bound values to iterate over.
-  (hashmap-any? (lambda (_ values) (null? values)) bindings))
-
-(define (will-be-closed? identifier PNL)
-  (>= PNL (hashmap-ref (bindings) identifier)))
+  (or (hashmap-empty? bindings)
+      (hashmap-any? (lambda (_ values) (null? values)) bindings)))
 
 (define (produce-ellipsis-list number-of-ellipses patcar)
   ;; Prepare a procedure that matches an ellipsis pattern in a list.
-  (let*-values (((produce-part open-identifiers)
-                 ;; Get all open identifiers under the ellipses.
-                 (parameterize ((PNL (+ (PNL) number-of-ellipses)))
-                   (compile patcar)))
+  (define (will-be-closed? identifier PNL)
+    ;; Returns true if the appearance of this is closed appearing in this
+    ;; ellipsis.
+    (let ((RNL (hashmap-ref (bindings) identifier)))
+      (>= PNL RNL)))
+  (let*-values (((produce-part open-identifiers) (compile patcar))
+                ((open-identifiers)
+                 ;; Give the open identifiers their PNLs according to this
+                 ;; pattern.
+                 (hashmap-map (lambda (id old-PNL)
+                                (values id (+ old-PNL number-of-ellipses)))
+                              bound-identifier-comparator
+                              open-identifiers))
                 ((open-identifiers-to-return)
                  ;; Remove identifiers which that will become closed after
                  ;; exiting the ellipses.
                  (hashmap-remove will-be-closed? open-identifiers)))
-    (when (null? open-identifiers)
+    (when (hashmap-empty? open-identifiers)
       (error "ellipsis production does not have open identifiers" patcar))
+    ;; TODO: Need to handle the case of sequential ellipses. They are
+    ;; equivalent to
+    ;;     x ... ... => {append ((x ...) ...)}
+    ;;     x ... ... ... => {append {append (((x ...) ...) ...)}}
+    ;; and so on where `append` is meta-level.
     (values (lambda (bindings)
               (do ((iterated (open-bindings open-identifiers bindings)
                              (next-binding iterated))
                    (patterns (list-accumulator)))
-                  ((bindings-finished? iterated) (patterns (eof-object)))
+                  ((bindings-finished? iterated)
+                   (patterns (eof-object)))
                 (let ((subbindings (union/current-bindings bindings
                                                            iterated)))
                   (patterns (produce-part subbindings)))))
