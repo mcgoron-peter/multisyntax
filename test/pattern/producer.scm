@@ -13,54 +13,70 @@
  | limitations under the License.
  |#
 
-(define (test-producers)
+(define (idmap . values)
+  (apply hashmap bound-identifier-comparator values))
+
+(define (test-self-syntax)
+  (let ((producer (compile-producer '() '() '())))
+    (test-equal "()" '() (producer (idmap))))
+  (let ((producer (compile-producer '() 0 '())))
+    (test-equal "0" 0 (producer (idmap))))
+  (let ((producer (compile-producer '() "call/cc" '())))
+    (test-equal "string" "call/cc" (producer (idmap))))
+  (let ((producer (compile-producer '() #u8(1 2 3 4) '())))
+    (test-equal "bytevector" #u8(1 2 3 4) (producer (idmap))))
+  (let ((producer (compile-producer '() #f '())))
+    (test-equal "boolean" #f (producer (idmap))))
+  (let ((producer (compile-producer '() #\a '())))
+    (test-equal "char" #\a (producer (idmap)))))
+
+(define (test-list-ellipses)
   (let ((producer
          (compile-producer '()
                            (list (empty-wrap 'x) (empty-wrap '...))
-                           (hashmap bound-identifier-comparator
-                                    (empty-wrap 'x)
-                                    1))))
+                           (idmap (empty-wrap 'x)
+                                  1))))
     (test-equal "x ..."
                 '(1 2 3 4 5)
-                (producer (hashmap bound-identifier-comparator
-                                   (empty-wrap 'x)
-                                   '(5 4 3 2 1)))))
+                (producer (idmap (empty-wrap 'x)
+                                 '(5 4 3 2 1)))))
   (let ((producer
          (compile-producer '()
                            (list (list (empty-wrap 'x) (empty-wrap '...))
                                  (empty-wrap '...))
-                           (hashmap bound-identifier-comparator
-                                    (empty-wrap 'x)
-                                    2))))
+                           (idmap (empty-wrap 'x)
+                                  2))))
     (test-equal "(x ...) ..."
                 '((1 2) (3 4) (5 6) (7 8))
-                (producer (hashmap bound-identifier-comparator
-                                   (empty-wrap 'x)
-                                   '((8 7) (6 5) (4 3) (2 1))))))
+                (producer (idmap (empty-wrap 'x)
+                                 '((8 7) (6 5) (4 3) (2 1))))))
   (let ((producer
          (compile-producer '()
                            (list (empty-wrap 'x) (empty-wrap '...) (empty-wrap '...))
-                           (hashmap bound-identifier-comparator
-                                    (empty-wrap 'x)
-                                    2))))
+                           (idmap (empty-wrap 'x)
+                                  2))))
     (test-equal "x ... ..."
                 '(1 2 3 4 5 6 7 8)
-                (producer (hashmap bound-identifier-comparator
-                                   (empty-wrap 'x)
-                                   '((8 7) (6 5) (4 3) (2 1))))))
+                (producer (idmap (empty-wrap 'x)
+                                 '((8 7) (6 5) (4 3) (2 1))))))
   (test-group "(... (x ...))"
     (let* ((producer
             (compile-producer '()
                               (list (empty-wrap '...) (list (empty-wrap 'x) (empty-wrap '...)))
-                              (hashmap bound-identifier-comparator
-                                       (empty-wrap 'x)
-                                       0)))
-           (got (producer (hashmap bound-identifier-comparator
-                                   (empty-wrap 'x)
-                                   0))))
+                              (idmap (empty-wrap 'x)
+                                     0)))
+           (got (producer (idmap (empty-wrap 'x)
+                                 0))))
       (test-assert "returned a list" (list? got))
       (test-eqv "returned the correct length"
                 2
                 (length got))
       (test-eqv "first value is 0" 0 (car got))
       (test-assert "second value" (bound-identifier=? (cadr got) (empty-wrap '...))))))
+
+(define (test-producers)
+  (test-group "producers"
+    (test-group "self-syntax"
+      (test-self-syntax))
+    (test-group "list ellipses"
+      (test-list-ellipses))))
