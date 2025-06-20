@@ -14,13 +14,13 @@
 (import (rename (multisyntax syntax-object test)
                 (test test-syntax-object)))
 
-#;(test-syntax-object)
+(test-syntax-object)
 
 (load "../multisyntax/pattern/internal.sld")
 (load "../multisyntax/pattern/matcher.sld")
 (load "pattern/matcher.sld")
 (import (multisyntax pattern matcher test))
-#;(test-patterns)
+(test-patterns)
 
 (load "../multisyntax/pattern/producer.sld")
 (load "pattern/producer.sld")
