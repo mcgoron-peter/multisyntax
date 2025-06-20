@@ -15,7 +15,7 @@
 
 (define-library (multisyntax pattern producer)
   (import (scheme base) (scheme write) (scheme case-lambda)
-          (srfi 26) (srfi 111) (srfi 113) (srfi 146 hash) (srfi 158)
+          (srfi 1) (srfi 26) (srfi 111) (srfi 113) (srfi 146 hash) (srfi 158)
           (srfi 197)
           (multisyntax utils) (multisyntax pattern internal)
           (only (multisyntax syntax-object)

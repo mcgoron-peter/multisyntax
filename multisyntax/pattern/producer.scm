@@ -104,16 +104,19 @@
 (define (rewrite/temporaries pattern bindings)
   ;; Rewrite `pattern` such that all pattern-bound identifiers occur in
   ;; `pattern` at most once.
-  (define appearances (set bound-identifier-comparator))
+  (define appearances (hashmap bound-identifier-comparator))
   (define (add-appearance! id)
-    (set! appearances (set-adjoin appearances id)))
+    (set! appearances (hashmap-adjoin appearances id '())))
   (define (appears? id)
-    (set-contains? appearances id))
+    (hashmap-contains? appearances id))
   (define (add-temporary! id)
-    (let ((new (generate-identifier (syntax->datum id))))
-      (set! bindings (hashmap-adjoin bindings
-                                     new
-                                     (hashmap-ref bindings id)))
+    (let ((old (hashmap-ref bindings id))
+          (new (generate-identifier (syntax->datum id))))
+      (set! bindings (hashmap-adjoin bindings new old))
+      (set! appearances (hashmap-update appearances
+                                        id
+                                        (lambda (cdr)
+                                          (cons new cdr))))
       new))
   (define (rewrite pattern)
     (let ((pattern (unwrap-syntax pattern)))
@@ -126,18 +129,44 @@
         ((actual-ellipsis? pattern) pattern)
         ((and (identifier? pattern) (appears? pattern))
          (add-temporary! pattern))
-        ((identifier? pattern)
+        ((and (identifier? pattern) (hashmap-contains? bindings pattern))
          (add-appearance! pattern)
          pattern)
         (else pattern))))
   (let ((pattern (rewrite pattern)))
-    (values pattern bindings)))
+    (values pattern bindings appearances)))
 
 (define bindings
   ;; Mapping bound identifiers to their real nesting level.
   (make-parameter #f))
 
 (define all-bindings (make-parameter #f))
+
+(define (copy-bindings bindings appearances)
+  ;; Appearances is a map from identifiers to generated identifiers. Each
+  ;; generated identifier must inherit the bindings of the key.
+  (hashmap-fold
+   (lambda (copy-from copy-to-list bindings)
+     (let ((copy-from (hashmap-ref bindings copy-from)))
+       (fold (lambda (copy-to bindings)
+               (hashmap-adjoin bindings copy-to copy-from))
+             bindings
+             copy-to-list)))
+   bindings
+   appearances))
+
+(define (compile/rewrite pattern %bindings)
+  (let-values (((pattern %bindings rebindings)
+                (rewrite/temporaries pattern %bindings)))
+    (parameterize ((bindings %bindings))
+      (let-values (((producer open-bindings)
+                    (compile pattern)))
+        (if (not (hashmap-empty? open-bindings))
+            (error "pattern not closed" pattern)
+            (lambda (bindings)
+              (let ((bindings (copy-bindings bindings rebindings)))
+                (parameterize ((all-bindings bindings))
+                  (producer bindings)))))))))
 
 (define compile-producer
   ;; Enty point into the producer compiler.
@@ -148,18 +177,12 @@
     ((literals pattern %bindings)
      (compile-producer literals pattern %bindings #f))
     ((literals pattern %bindings ellipsis)
+     ;; This part is parameterized outside of the second parameterization
+     ;; in `compile/rewrite` because the rewriter requires access to the
+     ;; literal and ellipsis procedures, which are activated by `matcher-input`.
      (parameterize ((matcher-input (vector ellipsis literals))
                     (disable-ellipsis? #f))
-       (let-values (((pattern %bindings)
-                     (rewrite/temporaries pattern %bindings)))
-         (parameterize ((bindings %bindings))
-           (let-values (((producer open-bindings)
-                         (compile pattern)))
-             (if (not (hashmap-empty? open-bindings))
-                 (error "pattern not closed" pattern)
-                 (lambda (bindings)
-                   (parameterize ((all-bindings bindings))
-                     (producer bindings)))))))))))
+       (compile/rewrite pattern %bindings)))))
 
 (define (compile pattern)
   ;; Returns a procedure that will produce `pattern` given the bindings.

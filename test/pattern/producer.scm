@@ -107,7 +107,45 @@
                           ((3 2) 200)
                           ((1 0) 100))
                          900 800 700 600)
-                  got))))
+                  got)))
+  (test-group "repetition of self-syntax"
+    (let ((producer (compile-producer
+                     '()
+                     (list (list (empty-wrap 'x) 10) (empty-wrap '...))
+                     (idmap (empty-wrap 'x) 1))))
+      (test-equal '((1 10) (2 10) (3 10))
+                  (producer (idmap (empty-wrap 'x) '(3 2 1))))))
+  (test-group "multiple uses of the same identifier"
+    (let ((producer (compile-producer
+                     '()
+                     (list (list (empty-wrap 'x) (empty-wrap '...))
+                           (list (empty-wrap 'x) (empty-wrap '...)))
+                     (idmap (empty-wrap 'x) 1))))
+      (test-equal '((1 2 3) (1 2 3))
+                  (producer (idmap (empty-wrap 'x) '(3 2 1))))))
+  (test-group "excess ellipses"
+    (let ((producer (compile-producer
+                     '()
+                     (list (list (list (empty-wrap 'x) (empty-wrap '...))
+                                 (empty-wrap 'y))
+                           (empty-wrap '...))
+                     (idmap (empty-wrap 'x) 1
+                            (empty-wrap 'y) 1))))
+      (test-equal '(((1 2 3) 10) ((1 2 3) 20) ((1 2 3) 30))
+                  (producer (idmap (empty-wrap 'x) '(3 2 1)
+                                   (empty-wrap 'y) '(30 20 10))))))
+  (test-group "(test2 (1 2) (3 4))"
+    ;; I don't know what the "correct" response for this is, but this
+    ;; should emulate Chez's output.
+    (let* ((pat
+            (list (list (list (empty-wrap 'x)
+                             (list (empty-wrap 'x) (empty-wrap '...)))
+                       (empty-wrap '...))
+                  (empty-wrap '...)))
+           (producer (compile-producer '() pat (idmap (empty-wrap 'x) 2))))
+      (test-equal '(((1 (1 2)) (2 (3 4))) ((3 (1 2)) (4 (3 4))))
+                  (producer (idmap (empty-wrap 'x)
+                                   '((4 3) (2 1))))))))
 
 (define (test-producers)
   (test-group "producers"

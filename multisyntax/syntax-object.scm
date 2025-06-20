@@ -269,14 +269,21 @@
   ;; previous identifier.
   (case-lambda
     (() (generate-identifier (generate-unique-symbol)))
-    ((symbol) (raw-wrap symbol
-                        (set timestamp-comparator (generate-unique-integer))
-                        (mapping environment-key-comparator)
-                        (mapping environment-key-comparator)))))
+    ((symbol)
+     (when (not (symbol? symbol))
+       (error "generate-symbol requires symbol" symbol))
+     (raw-wrap symbol
+               (set timestamp-comparator (generate-unique-integer))
+               (mapping environment-key-comparator)
+               (mapping environment-key-comparator)))))
 
 (define (generate-temporaries lst)
   ;; Generate a list of identifiers from `generate-identifier`.
-  (map generate-identifier lst))
+  (let loop ((lst (unwrap-syntax lst))
+             (acc '()))
+    (if (null? lst)
+        '()
+        (loop (unwrap-syntax (cdr list)) (cons (generate-identifier) acc)))))
 
 (define (symbolic-identifier=? id1 id2)
   ;; Returns true if the underlying symbol of each identifier is the same.
@@ -342,7 +349,7 @@
     ((pair? stx) (cons (syntax->datum (car stx))
                        (syntax->datum (cdr stx))))
     ((vector? stx) (vector-map syntax->datum stx))
-    ((wrap? stx) (wrap->expr stx))
+    ((wrap? stx) (syntax->datum (wrap->expr stx)))
     (else stx)))
 
 (define (if-contains-wrap operate obj)
