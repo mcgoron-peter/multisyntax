@@ -34,10 +34,15 @@
 #;(let-values (((global-map expanded-list)
               (expand initial-environment (list (empty-wrap '(lambda x x)))))))
 
-(define-values (global-map expanded-list)
+#;(define-values (global-map expanded-list)
   (expand initial-environment
           (list (empty-wrap '(let-syntax ((λ lambda))
                                (λ x x))))))
+
+(let-values (((global-map expanded-list)
+              (expand initial-environment
+                      (list (empty-wrap '(lambda lambda (lambda lambda)))))))
+  (alpha expanded-list))
 
 #;(begin
   (load "examples/untyped-lambda-calculus.sld")

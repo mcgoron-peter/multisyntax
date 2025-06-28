@@ -358,6 +358,7 @@
           ((pair? expr) (cons (push-wrap stx (car expr))
                               (push-wrap stx (cdr expr))))
           ((vector? expr) (vector-map (cut push-wrap stx <>) expr))
+          ((self-syntax? expr) expr)
           (else stx)))
       stx))
 

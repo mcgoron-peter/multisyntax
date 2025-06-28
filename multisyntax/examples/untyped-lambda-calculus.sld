@@ -19,5 +19,5 @@
           (multisyntax syntax-object)
           (multisyntax pattern matcher)
           (multisyntax pattern producer))
-  (export expand transformer? initial-environment)
+  (export expand transformer? initial-environment alpha)
   (include "untyped-lambda-calculus.scm"))

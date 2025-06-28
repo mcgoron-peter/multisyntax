@@ -109,9 +109,10 @@
 
 (define (is? env stx id)
   ;; Return true if `stx` in `env` is `eq?` to `id`.
-  (and (identifier? (syntax-car stx))
-       (let ((resolved (hashmap-ref/default env (syntax-car stx) #f)))
-         (eq? resolved id))))
+  (let ((stx (unwrap-syntax stx)))
+    (and (pair? stx) (identifier? (car stx))
+         (let ((resolved (hashmap-ref/default env (car stx) #f)))
+           (eq? resolved id)))))
 
 (define (identifier-is-transformer env stx)
   ;; Returns transformer if `stx` is a syntax-rules transformer in `env`.
@@ -177,19 +178,29 @@
   ;; TODO: fix function application
   ;; Expander of expressions (not toplevel statements).
   (let ((stx (unwrap-syntax stx)))
+    #;(begin
+        (display (list stx (syntax->datum stx) (self-syntax? stx))) (newline)
+        (display (map (lambda (pair)
+                      (cons (syntax->datum (car pair)) (cdr pair)))
+                    (hashmap->alist env)))
+        (newline))
     (cond
       ((and (exact-integer? stx) (positive? stx))
        (church-numeral stx))
+      ((self-syntax? stx) stx)
       ((identifier? stx) stx)
       ((is? env stx 'lambda)
        (let* ((bound (syntax-cxr '(d a) stx))
-              (renamed (generate-identifier (syntax->datum bound)))
+              (renamed (add-substitution
+                        bound
+                        bound
+                        (generate-lexical-location (syntax->datum bound))))
               (body (syntax-cxr '(d d a) stx)))
          (list (empty-wrap 'lambda)
                renamed
                (expand-expr
-                (hashmap-adjoin env renamed 'variable)
-                (add-substitution body renamed bound)))))
+                (hashmap-set env renamed 'variable)
+                (add-substitution body bound renamed)))))
       ((is? env stx 'let-syntax)
        (let-syntax-expander env stx expand-expr))
       ((is? env stx 'letrec-syntax)
@@ -324,3 +335,13 @@
           (fold globalenv (cdr stxlist) (append-reverse next acc)))))
   (fold initenv (unwrap-list stx) '()))
 
+(define (alpha stx)
+  (let ((stx (unwrap-syntax stx)))
+    (cond
+      ((pair? stx) (cons (alpha (car stx)) (alpha (cdr stx))))
+      ((identifier? stx)
+       (let ((loc (resolve stx)))
+         (if (symbol? loc)
+             loc
+             (lexical-location->string loc))))
+      (else stx))))
