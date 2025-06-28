@@ -17,9 +17,9 @@
   (list '() 1 #\a #f "a" #u8(1 2 3 4)))
 
 (define (test-locations)
-  (test-assert (comparator-test-type environment-key-comparator
+  (test-assert (comparator-test-type location-comparator
                                        (generate-lexical-location 'test)))
-  (test-assert (comparator-test-type environment-key-comparator
+  (test-assert (comparator-test-type location-comparator
                                        'test)))
 
 (define (test-self-syntax)
@@ -98,7 +98,7 @@
                                                  (generate-timestamp))
                                   (empty-wrap 'test)
                                   newloc)))
-      (test-assert (=? environment-key-comparator
+      (test-assert (=? location-comparator
                        'test
                        (resolve stx)))))
   (test-group "mismatched resolved name"
@@ -106,7 +106,7 @@
            (stx (add-substitution (empty-wrap 'test)
                                   (empty-wrap 'test2)
                                   newloc)))
-      (test-assert (=? environment-key-comparator
+      (test-assert (=? location-comparator
                        'test
                        (resolve stx)))))
   (test-group "multiple names in environment"
@@ -118,7 +118,7 @@
            (stx (add-substitution stx
                                   (empty-wrap 'test2)
                                   loc2)))
-      (test-assert (=? environment-key-comparator
+      (test-assert (=? location-comparator
                        (resolve stx)
                        loc1))))
   (test-group "intermediate substitutions"
@@ -128,7 +128,7 @@
                                   (empty-wrap 'test)
                                   loc1))
            (stx (add-substitution stx stx loc2)))
-      (test-assert (=? environment-key-comparator
+      (test-assert (=? location-comparator
                        (resolve stx)
                        loc2)))))
 

@@ -22,7 +22,7 @@
           (multisyntax utils))
   (export generate-lexical-location generate-lexical-locations
           lexical-location->string lexical-location-comparator
-          environment-key-comparator bound-identifier-comparator
+          bound-identifier-comparator location-comparator
           ;; Misc. predicates
           self-syntax? syntax?
           ;; Operations on wraps

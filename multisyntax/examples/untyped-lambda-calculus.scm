@@ -51,18 +51,18 @@
   transformer?
   (clauses unwrap-syntax-rules))
 
-(define (empty-map) (hashmap bound-identifier-comparator))
+(define (empty-map) (hashmap location-comparator))
 
 (define initial-environment
-  (hashmap bound-identifier-comparator
-           (empty-wrap 'lambda) 'lambda
-           (empty-wrap 'define) 'define
-           (empty-wrap 'define-syntax) 'define-syntax
-           (empty-wrap 'splicing-let-syntax) 'splicing-let-syntax
-           (empty-wrap 'splicing-letrec-syntax) 'splicing-letrec-syntax
-           (empty-wrap 'let-syntax) 'let-syntax
-           (empty-wrap 'letrec-syntax) 'letrec-syntax
-           (empty-wrap 'syntax-rules) 'syntax-rules))
+  (hashmap location-comparator
+           'lambda 'lambda
+           'define 'define
+           'define-syntax 'define-syntax
+           'splicing-let-syntax 'splicing-let-syntax
+           'splicing-letrec-syntax 'splicing-letrec-syntax
+           'let-syntax 'let-syntax
+           'letrec-syntax 'letrec-syntax
+           'syntax-rules 'syntax-rules))
 
 (define (church-numeral stx)
   ;; Convert the exact non-negative integer `stx` into a Church numeral.
@@ -103,22 +103,24 @@
 (define (union-names env new-names tfmrs)
   ;; Add `new-names` bound to `tfmrs` in `env`, overriding previous
   ;; bindings.
-  (hashmap-union (alist->hashmap bound-identifier-comparator
-                                 (map cons new-names tfmrs))
+  (hashmap-union (alist->hashmap location-comparator
+                                 (map (lambda (name tfmr)
+                                        (cons (resolve name) tfmr))
+                                      new-names tfmrs))
                  env))
 
 (define (is? env stx id)
   ;; Return true if `stx` in `env` is `eq?` to `id`.
   (let ((stx (unwrap-syntax stx)))
     (and (pair? stx) (identifier? (car stx))
-         (let ((resolved (hashmap-ref/default env (car stx) #f)))
+         (let ((resolved (hashmap-ref/default env (resolve (car stx)) #f)))
            (eq? resolved id)))))
 
 (define (identifier-is-transformer env stx)
   ;; Returns transformer if `stx` is a syntax-rules transformer in `env`.
   (cond
     ((not (identifier? (syntax-car stx))) #f)
-    ((hashmap-ref/default env (syntax-car stx) #f)
+    ((hashmap-ref/default env (resolve (syntax-car stx)) #f)
      => (lambda (return)
           (and (transformer? return) return)))
     (else #f)))
@@ -161,7 +163,7 @@
         (let ((matcher (caar tfmr))
               (producer (cdar tfmr)))
           (cond
-            ((matcher tfmr) => producer)
+            ((matcher stx) => producer)
             (else (loop (cdr tfmr))))))))
 
 (define (macro-expand-expander env stx tfmr K)
@@ -178,12 +180,6 @@
   ;; TODO: fix function application
   ;; Expander of expressions (not toplevel statements).
   (let ((stx (unwrap-syntax stx)))
-    #;(begin
-        (display (list stx (syntax->datum stx) (self-syntax? stx))) (newline)
-        (display (map (lambda (pair)
-                      (cons (syntax->datum (car pair)) (cdr pair)))
-                    (hashmap->alist env)))
-        (newline))
     (cond
       ((and (exact-integer? stx) (positive? stx))
        (church-numeral stx))
@@ -199,7 +195,7 @@
          (list (empty-wrap 'lambda)
                renamed
                (expand-expr
-                (hashmap-set env renamed 'variable)
+                (hashmap-set env (resolve renamed) 'variable)
                 (add-substitution body bound renamed)))))
       ((is? env stx 'let-syntax)
        (let-syntax-expander env stx expand-expr))
@@ -221,10 +217,16 @@
   ;; object.
   (define (operate clause)
     (let*-values (((clause) (unwrap-list clause))
+                  ((literals) (unwrap-list literals))
                   ((matcher bindings _)
                    (compile-pattern literals
                                     (list-ref clause 0)
-                                    ellipsis)))
+                                    ellipsis))
+                  ((bindings)
+                   (hashmap-map (lambda (key value)
+                                  (values key (car value)))
+                                bound-identifier-comparator
+                                bindings)))
       (cons matcher (compile-producer literals
                                       (list-ref clause 1)
                                       bindings
@@ -235,7 +237,7 @@
   (let ((stx (unwrap-syntax stx)))
     (cond
       ((identifier? stx)
-       (hashmap-ref env stx (lambda () (error "transformer not found" stx))))
+       (hashmap-ref env (resolve stx) (lambda () (error "transformer not found" stx))))
       ((identifier-is-transformer env stx)
        => (lambda (tfmr)
             (macro-expand-expander env
@@ -244,15 +246,16 @@
                                    (lambda (stx)
                                      (expand-transformer env stx)))))
       ((is? env stx 'syntax-rules)
-       (if (identifier? (syntax-cxr '(d a) stx))
-           (expand-syntax-rules env
-                                (syntax-cxr '(d a) stx)
-                                (syntax-cxr '(d d a) stx)
-                                (syntax-cxr '(d d d) stx))
-           (expand-syntax-rules env
-                                #f
-                                (syntax-cxr '(d a) stx)
-                                (syntax-cxr '(d d) stx))))
+       (let ((stx (unwrap-list stx)))
+         (if (identifier? (syntax-cxr '(d a) stx))
+             (expand-syntax-rules env
+                                  (syntax-cxr '(d a) stx)
+                                  (syntax-cxr '(d d a) stx)
+                                  (syntax-cxr '(d d d) stx))
+             (expand-syntax-rules env
+                                  #f
+                                  (syntax-cxr '(d a) stx)
+                                  (syntax-cxr '(d d) stx)))))
       ((is? env stx 'let-syntax)
        (let-syntax-expander env stx expand-transformer))
       ((is? env stx 'letrec-syntax)
@@ -281,9 +284,10 @@
         (env (hashmap-union lexenv globalenv)))
     (cond
       ((is? env stx 'define-syntax)
-       (let* ((name (syntax-cxr '(d a) stx))
+       (let* ((stx (unwrap-list stx))
+              (name (syntax-cxr '(d a) stx))
               (tfmr (expand-transformer env (syntax-cxr '(d d a) stx))))
-         (values (hashmap-adjoin globalenv name tfmr) '())))
+         (values (hashmap-set globalenv (resolve name) tfmr) '())))
       ((is? env stx 'splicing-let-syntax)
        (let*-values (((old-names new-names tfmrs body)
                       (on-bindings stx))
@@ -308,7 +312,7 @@
       ((is? env stx 'define)
        (let* ((name (syntax-cxr '(d a) stx))
               (expanded-value (expand-expr env (syntax-cxr '(d d a) stx))))
-         (values (hashmap-adjoin globalenv name 'variable)
+         (values (hashmap-adjoin globalenv (resolve name) 'variable)
                  (list (list (empty-wrap 'define)
                              name
                              expanded-value)))))
@@ -319,9 +323,10 @@
                                    tfmr
                                    (lambda (stx)
                                      (expand-toplevel globalenv lexenv stx)))))
-      (else (values globalenv
-                    (list
-                     (expand-expr (hashmap-union lexenv globalenv) stx)))))))
+      (else
+       (values globalenv
+               (list
+                (expand-expr (hashmap-union lexenv globalenv) stx)))))))
 
 (define (expand initenv stx)
   ;; Expand `stx`, which is a list of syntax forms, into a list of syntax

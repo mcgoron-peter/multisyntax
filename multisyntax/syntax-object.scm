@@ -77,7 +77,7 @@
                  "."
                  (number->string (lexical-location->unique-id ll))))
 
-(define environment-key-comparator
+(define location-comparator
   ;; Comparator for keys to the environment that stores substitutions.
   ;; 
   ;; Keys are either regular Scheme symbols or unique lexical locations.
@@ -146,7 +146,7 @@
 (define empty-wrap
   ;; Wrap `expr` with an empty timestamp set and environment.
   (let ((empty-timestamp-set (set timestamp-comparator))
-        (empty-mapping (mapping environment-key-comparator)))
+        (empty-mapping (mapping location-comparator)))
     (lambda (expr)
       (raw-wrap expr
                 empty-timestamp-set
@@ -291,8 +291,8 @@
        (error "generate-symbol requires symbol" symbol))
      (raw-wrap symbol
                (set timestamp-comparator (generate-unique-integer))
-               (mapping environment-key-comparator)
-               (mapping environment-key-comparator)))))
+               (mapping location-comparator)
+               (mapping location-comparator)))))
 
 (define (generate-temporaries lst)
   ;; Generate a list of identifiers from `generate-identifier`.
@@ -310,7 +310,7 @@
 (define (free-identifier=? id1 id2)
   ;; Returns true if, when inserted into output as free identifiers, `id1`
   ;; and `id2` would refer to the same location.
-  (=? environment-key-comparator (resolve id1) (resolve id2)))
+  (=? location-comparator (resolve id1) (resolve id2)))
 
 (define (bound-identifier=? id1 id2)
   ;; Returns true if binding one identifier would cause the other
@@ -321,7 +321,7 @@
 (define bound-identifier-comparator
   (let ((bound-identifier<?
          (lambda (id1 id2)
-           (comparator-if<=> environment-key-comparator
+           (comparator-if<=> location-comparator
                              (resolve id1)
                              (resolve id2)
              #t
@@ -333,7 +333,7 @@
          (lambda (id)
            (+ (comparator-hash set-comparator
                                (wrap->timestamps id))
-              (comparator-hash environment-key-comparator
+              (comparator-hash location-comparator
                                (resolve id))))))
     (make-comparator
      identifier?
