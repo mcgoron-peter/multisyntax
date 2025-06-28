@@ -66,6 +66,12 @@
   (raw-lexical-location symbol
                         (generate-unique-integer)))
 
+(define (generate-lexical-locations list)
+  (do ((acc (list-accumulator))
+       (list (unwrap-list list) (cdr list)))
+      ((null? list) (acc (eof-object)))
+    (acc (generate-lexical-location (syntax->datum (car list))))))
+
 (define (lexical-location->string ll)
   (string-append (symbol->string (lexical-location->symbol ll))
                  "."
@@ -209,7 +215,6 @@
       ((mapping-ref/default invenv location-from '())
        => (lambda (lst)
             (for-each (lambda (maps-to-location-from)
-                        (display "a\n")
                         (set! env (mapping-set
                                    env
                                    maps-to-location-from
@@ -234,6 +239,12 @@
   ;; 
   ;; Otherwise update `environment` and `inverse-environment` with the
   ;; new locations.
+  ;; 
+  ;; If `location-to` is a list, then `id` must be a list too. Each
+  ;; pair `(id location-to)` is added as a substitution.
+  ;; 
+  ;; If `location-to` is an identifier, the location that it resolves to
+  ;; is added as a substitution.
   (cond
     ((pair? stx) (cons (add-substitution (car stx)
                                          id
@@ -245,19 +256,25 @@
                                stx))
     ((self-syntax? stx) stx)
     (else
-     (let ((timestamps (wrap->timestamps stx)))
-       (if (not (set=? timestamps (wrap->timestamps id)))
-           stx
-           (add-timestamps/same-wrap stx id location-to))))))
+     (let operate ((id id)
+                   (location-to location-to)
+                   (stx stx))
+       (cond
+         ((pair? location-to)
+          (fold operate stx id location-to))
+         ((identifier? location-to)
+          (operate id (resolve location-to) stx))
+         ((not (set=? (wrap->timestamps stx) (wrap->timestamps id)))
+          stx)
+         (else
+          (add-timestamps/same-wrap stx id location-to)))))))
 
 (define (generate-unique-symbol)
   ;; Tries as best as possible to generate a unique symbol. Not read/write
   ;; invariant. An actual implementation of this procedure would require
   ;; implementation support.
   (string->symbol
-   (string-append "gensym."
-                  (number->string
-                   (generate-unique-integer)))))
+   (string-append "gensym." (number->string (generate-unique-integer)))))
 
 (define (identifier-lexically-bound? id)
   ;; Returns true if `id` was bound by some lexical construct. Returns
@@ -279,11 +296,12 @@
 
 (define (generate-temporaries lst)
   ;; Generate a list of identifiers from `generate-identifier`.
-  (let loop ((lst (unwrap-syntax lst))
-             (acc '()))
-    (if (null? lst)
-        '()
-        (loop (unwrap-syntax (cdr list)) (cons (generate-identifier) acc)))))
+  (do ((acc (list-accumulator))
+       (lst (unwrap-list lst) (cdr lst)))
+      ((null? lst) (acc (eof-object)))
+    (if (identifier? (car lst))
+        (acc (generate-identifier (syntax->datum (car lst))))
+        (acc (generate-identifier)))))
 
 (define (symbolic-identifier=? id1 id2)
   ;; Returns true if the underlying symbol of each identifier is the same.
@@ -415,3 +433,22 @@
     ((self-syntax? datum) datum)
     ((if-contains-wrap operate datum) => values)
     (else (push-wrap context-id datum))))
+
+(define (syntax-cxr list stx)
+  (if (null? list)
+      stx
+      (let ((stx (unwrap-syntax stx)))
+        (case (car list)
+          ((a) (syntax-cxr (cdr list) (car stx)))
+          ((d) (syntax-cxr (cdr list) (cdr stx)))
+          (else (error "invalid accessor" list stx))))))
+
+(define (syntax-car stx) (syntax-cxr '(a) stx))
+(define (syntax-cdr stx) (syntax-cxr '(d) stx))
+
+(define (unwrap-list stx)
+  (let ((stx (unwrap-syntax stx)))
+    (if (pair? stx)
+        (cons (car stx) (unwrap-syntax (cdr stx)))
+        stx)))
+

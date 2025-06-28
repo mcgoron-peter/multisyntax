@@ -18,19 +18,20 @@
 (define-library (multisyntax syntax-object)
   (import (scheme base) (scheme case-lambda)
           (scheme write)
-          (srfi 26) (srfi 113) (srfi 128) (srfi 133) (srfi 146) (srfi 228)
+          (srfi 1) (srfi 26) (srfi 113) (srfi 128) (srfi 133) (srfi 146) (srfi 158) (srfi 228)
           (multisyntax utils))
-  (export generate-lexical-location
-          lexical-location->string
-          lexical-location-comparator
-          environment-key-comparator
-          bound-identifier-comparator
+  (export generate-lexical-location generate-lexical-locations
+          lexical-location->string lexical-location-comparator
+          environment-key-comparator bound-identifier-comparator
           ;; Misc. predicates
           self-syntax? syntax?
           ;; Operations on wraps
           generate-timestamp empty-wrap add-timestamp add-substitution
           wrap->timestamps resolve
           identifier-lexically-bound?
+          ;; Non-standard procedures that can be defined in terms of
+          ;; Macrological Fascile procedures
+          syntax-cxr syntax-car syntax-cdr unwrap-list
           ;; Standard operations
           symbolic-identifier=? free-identifier=? bound-identifier=?
           identifier?
