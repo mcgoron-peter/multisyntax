@@ -13,11 +13,11 @@
  | limitations under the License.
  |#
 
-(define-library (multisyntax examples untyped-lambda-calculus)
-  (import (scheme base) (scheme write)
-          (srfi 1) (srfi 146 hash)
-          (multisyntax syntax-object)
-          (multisyntax pattern matcher)
-          (multisyntax pattern producer))
-  (export expand transformer? initial-environment alpha debruijnize)
+(define-library (multisyntax examples untyped-lambda-calculus test)
+  (import (scheme base) (srfi 64)
+          (multisyntax syntax-object) (multisyntax examples untyped-lambda-calculus))
+  (cond-expand
+    (chicken (import (chicken condition)))
+    (else))
+  (export test-untyped-lambda-calculus)
   (include "untyped-lambda-calculus.scm"))

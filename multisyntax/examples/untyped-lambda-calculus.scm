@@ -363,3 +363,25 @@
              loc
              (lexical-location->string loc))))
       (else stx))))
+
+(define (debruijnize env stx free-variables)
+  (let ((stx (unwrap-syntax stx)))
+    (cond
+      ((is? env stx 'lambda)
+       (list 'lambda
+             (debruijnize env
+                          (syntax-cxr '(d d a) stx)
+                          (cons (cons (syntax-cxr '(d a) stx)
+                                      0)
+                                (map (lambda (pair)
+                                       (cons (car pair)
+                                             (+ 1 (cdr pair))))
+                                     free-variables)))))
+      ((and (identifier? stx)
+            (assoc stx free-variables bound-identifier=?))
+       => cdr)
+      ((identifier? stx) (syntax->datum stx))
+      ((pair? stx)
+       (cons (debruijnize env (car stx) free-variables)
+             (debruijnize env (cdr stx) free-variables)))
+      (else stx))))
