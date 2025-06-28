@@ -19,7 +19,7 @@
           (multisyntax utils) (multisyntax pattern internal)
           (only (multisyntax syntax-object)
                 identifier? bound-identifier=? free-identifier=?
-                unwrap-syntax
+                unwrap-syntax syntax->datum
                 ;; unportable extensions
                 self-syntax?
                 empty-wrap bound-identifier-comparator))

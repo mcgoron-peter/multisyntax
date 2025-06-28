@@ -272,17 +272,19 @@
   (define match-patcddr (compile patcddr))
   (lambda (names stx)
     (let match* ((names (hashmap-union names default-names))
-                 (stx (unwrap-syntax stx)))
-      (cond
-        ((null? stx) names)
-        ((not (pair? stx)) #f)
-        ((match-patcar (empty-map) (car stx))
-         => (lambda (newnames)
-              (cond
-                ((match* (merge-names names newnames) (cdr stx))
-                 => values)
-                (else (match-patcddr names stx)))))
-        (else (match-patcddr names stx))))))
+                 (stx stx))
+      (let ((stx (unwrap-syntax stx)))
+        (cond
+          ((null? stx) names)
+          ((not (pair? stx)) #f)
+          ((match-patcar (empty-map) (car stx))
+           => (lambda (newnames)
+                (cond
+                  ((match* (merge-names names newnames) (cdr stx))
+                   => (lambda (names)
+                        names))
+                  (else (match-patcddr names stx)))))
+          (else (match-patcddr names stx)))))))
 
 (define (compile-actual-pair patcar patcdr)
   ;; Compile a pair that is not an ellipsis pattern. I.e. match `patcar`
@@ -294,7 +296,8 @@
       (cond
         ((not (pair? stx)) #f)
         ((match-patcar names (car stx))
-         => (cute match-patcdr <> (cdr stx)))
+         => (lambda (names)
+              (match-patcdr names (cdr stx))))
         (else #f)))))
 
 ;;; ;;;;;;;;;;;;;;;;;;;

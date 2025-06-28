@@ -62,6 +62,24 @@
                             (empty-wrap '(let (x (lambda x x)) (x x)))))))
   (display (alpha expanded-list)) (newline))
 
+(let-values (((global-map expanded-list)
+              (expand initial-environment
+                      (list (empty-wrap
+                             '(define-syntax let
+                                (syntax-rules ()
+                                  ((let ((name value)) body)
+                                   ((lambda name body) value)))))
+                            (empty-wrap
+                             '(define-syntax or
+                                (syntax-rules ()
+                                  ((or) false)
+                                  ((or x y ...)
+                                   (let ((tmp x))
+                                     (if tmp x (or y ...)))))))
+                            (empty-wrap
+                             '(or a b tmp c d e))))))
+  (display (alpha expanded-list)) (newline))
+
 #;(begin
   (load "examples/untyped-lambda-calculus.sld")
   (import (multisyntax examples untyped-lambda-calculus test))

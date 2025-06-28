@@ -15,6 +15,35 @@
 
 (define I (lambda x x))
 
+(define-syntax ∘
+  ;; function composition
+  (syntax-rules ()
+    ((∘) I)
+    ((∘ f g ...)
+     (f (∘ g ...)))))
+
+(splicing-let-syntax ((define-syntax* define-syntax))
+  (define-syntax* define-syntax
+    (syntax-rules (let-syntax letrec-syntax)
+      ((_ name (let-syntax bindings body))
+       (splicing-let-syntax bindings
+         (define-syntax name body)))
+      ((_ name (letrec-syntax bindings body))
+       (splicing-letrec-syntax bindings
+         (define-syntax name body)))
+      ((_ name body)
+       (define-syntax* name body)))))
+
+(define-syntax ∘←
+  ;; postfix function composition
+  (let-syntax ((R (syntax-rules ()
+                    ((R () (acc ...))
+                     (∘ acc ...))
+                    ((R (head rest ...) (acc ...))
+                     (R (rest ...) (acc ...))))))
+    (syntax-rules ()
+      ((∘← f ...) (R (f ...) ())))))
+
 (splicing-let-syntax ((lambda lambda))
   ;; This binds `lambda` in the global syntatic environment into a
   ;; local, immutable syntatic environment.

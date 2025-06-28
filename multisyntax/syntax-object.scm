@@ -450,6 +450,6 @@
 (define (unwrap-list stx)
   (let ((stx (unwrap-syntax stx)))
     (if (pair? stx)
-        (cons (car stx) (unwrap-syntax (cdr stx)))
+        (cons (car stx) (unwrap-list (cdr stx)))
         stx)))
 

@@ -112,18 +112,21 @@
 (define (is? env stx id)
   ;; Return true if `stx` in `env` is `eq?` to `id`.
   (let ((stx (unwrap-syntax stx)))
-    (and (pair? stx) (identifier? (car stx))
+    (and (pair? stx)
+         (identifier? (car stx))
          (let ((resolved (hashmap-ref/default env (resolve (car stx)) #f)))
            (eq? resolved id)))))
 
 (define (identifier-is-transformer env stx)
   ;; Returns transformer if `stx` is a syntax-rules transformer in `env`.
-  (cond
-    ((not (identifier? (syntax-car stx))) #f)
-    ((hashmap-ref/default env (resolve (syntax-car stx)) #f)
-     => (lambda (return)
-          (and (transformer? return) return)))
-    (else #f)))
+  (let ((stx (unwrap-syntax stx)))
+    (cond
+      ((not (pair? stx)) #f)
+      ((not (identifier? (car stx))) #f)
+      ((hashmap-ref/default env (resolve (car stx)) #f)
+       => (lambda (return)
+            (and (transformer? return) return)))
+      (else #f))))
 
 (define (let-syntax-expander env stx K)
   ;; Continuation-passing-style expansion of `let-syntax`. Expands the
@@ -154,25 +157,29 @@
                          old-names
                          new-names))))
 
-(define (eval-transformer tfmr stx)
+(define (eval-transformer name tfmr stx)
   ;; Try to match each pattern in `tfmr`, and when one matches, call the
   ;; producer on the matched data.
   (let loop ((tfmr (unwrap-syntax-rules tfmr)))
     (if (null? tfmr)
-        (error "no matched pattern" stx tfmr)
+        (error "no matched pattern" name stx tfmr)
         (let ((matcher (caar tfmr))
               (producer (cdar tfmr)))
           (cond
-            ((matcher stx) => producer)
+            ((matcher stx)
+             => (lambda (bindings)
+                  (let ((return (producer bindings)))
+                    return)))
             (else (loop (cdr tfmr))))))))
 
-(define (macro-expand-expander env stx tfmr K)
+(define (macro-expand-expander name env stx tfmr K)
   ;; Evaluate the transformer `tfmr` with `stx`, properly adding and
   ;; removing macro expansion timesteps. Pass the result to `K`, which
   ;; is a function of one argument (not two like the `let-syntax-expander`
   ;; procedures).
   (let ((ts (generate-timestamp)))
-    (K (add-timestamp (eval-transformer tfmr
+    (K (add-timestamp (eval-transformer name
+                                        tfmr
                                         (add-timestamp stx ts))
                       ts))))
 
@@ -203,7 +210,8 @@
        (letrec-syntax-expander env stx expand-expr))
       ((identifier-is-transformer env stx)
        => (lambda (tfmr)
-            (macro-expand-expander env
+            (macro-expand-expander (syntax->datum (syntax-car stx))
+                                   env
                                    stx
                                    tfmr
                                    (lambda (stx)
@@ -231,7 +239,8 @@
                                       (list-ref clause 1)
                                       bindings
                                       ellipsis))))
-  (wrap-syntax-rules (map operate (unwrap-list clauses))))
+  (let ((clauses (unwrap-list clauses)))
+    (wrap-syntax-rules (map operate clauses))))
 
 (define (expand-transformer env stx)
   (let ((stx (unwrap-syntax stx)))
@@ -240,7 +249,8 @@
        (hashmap-ref env (resolve stx) (lambda () (error "transformer not found" stx))))
       ((identifier-is-transformer env stx)
        => (lambda (tfmr)
-            (macro-expand-expander env
+            (macro-expand-expander (syntax->datum (syntax-car stx))
+                                   env
                                    stx
                                    tfmr
                                    (lambda (stx)
@@ -256,6 +266,8 @@
                                   #f
                                   (syntax-cxr '(d a) stx)
                                   (syntax-cxr '(d d) stx)))))
+      ;; TODO: remove these, they are definable in terms of the splicing
+      ;; versions.
       ((is? env stx 'let-syntax)
        (let-syntax-expander env stx expand-transformer))
       ((is? env stx 'letrec-syntax)
@@ -300,12 +312,12 @@
       ((is? env stx 'splicing-letrec-syntax)
        (let*-values (((old-names new-names tfmrs body) (on-bindings stx))
                      ((tfmrs) (map (lambda (stx)
-                                    (expand-transformer env
-                                                        (add-substitution
-                                                         stx
-                                                         old-names
-                                                         new-names)))
-                                  tfmrs)))
+                                     (expand-transformer env
+                                                         (add-substitution
+                                                          stx
+                                                          old-names
+                                                          new-names)))
+                                   tfmrs)))
          (accumulate-splicing globalenv
                               (union-names lexenv new-names tfmrs)
                               body)))
@@ -318,7 +330,8 @@
                              expanded-value)))))
       ((identifier-is-transformer env stx)
        => (lambda (tfmr)
-            (macro-expand-expander env
+            (macro-expand-expander (syntax->datum (syntax-car stx))
+                                   env
                                    stx
                                    tfmr
                                    (lambda (stx)
