@@ -312,6 +312,19 @@
   ;; and `id2` would refer to the same location.
   (=? location-comparator (resolve id1) (resolve id2)))
 
+(define free-identifier-comparator
+  (let ((free-identifier<?
+         (lambda (x y)
+           (<? location-comparator (resolve x) (resolve y))))
+        (free-identifier-hash
+         (lambda (x)
+           (+ (comparator-hash location-comparator (resolve x))))))
+    (make-comparator
+     identifier?
+     free-identifier=?
+     free-identifier<?
+     free-identifier-hash)))
+
 (define (bound-identifier=? id1 id2)
   ;; Returns true if binding one identifier would cause the other
   ;; identifier to be bound.

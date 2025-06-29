@@ -51,18 +51,18 @@
   transformer?
   (clauses unwrap-syntax-rules))
 
-(define (empty-map) (hashmap location-comparator))
+(define (empty-map) (hashmap free-identifier-comparator))
 
 (define initial-environment
-  (hashmap location-comparator
-           'lambda 'lambda
-           'define 'define
-           'define-syntax 'define-syntax
-           'splicing-let-syntax 'splicing-let-syntax
-           'splicing-letrec-syntax 'splicing-letrec-syntax
-           'let-syntax 'let-syntax
-           'letrec-syntax 'letrec-syntax
-           'syntax-rules 'syntax-rules))
+  (hashmap free-identifier-comparator
+           (empty-wrap 'lambda) 'lambda
+           (empty-wrap 'define) 'define
+           (empty-wrap 'define-syntax) 'define-syntax
+           (empty-wrap 'splicing-let-syntax) 'splicing-let-syntax
+           (empty-wrap 'splicing-letrec-syntax) 'splicing-letrec-syntax
+           (empty-wrap 'let-syntax) 'let-syntax
+           (empty-wrap 'letrec-syntax) 'letrec-syntax
+           (empty-wrap 'syntax-rules) 'syntax-rules))
 
 (define (church-numeral stx)
   ;; Convert the exact non-negative integer `stx` into a Church numeral.
@@ -103,9 +103,9 @@
 (define (union-names env new-names tfmrs)
   ;; Add `new-names` bound to `tfmrs` in `env`, overriding previous
   ;; bindings.
-  (hashmap-union (alist->hashmap location-comparator
+  (hashmap-union (alist->hashmap free-identifier-comparator
                                  (map (lambda (name tfmr)
-                                        (cons (resolve name) tfmr))
+                                        (cons name tfmr))
                                       new-names tfmrs))
                  env))
 
@@ -114,7 +114,7 @@
   (let ((stx (unwrap-syntax stx)))
     (and (pair? stx)
          (identifier? (car stx))
-         (let ((resolved (hashmap-ref/default env (resolve (car stx)) #f)))
+         (let ((resolved (hashmap-ref/default env (car stx) #f)))
            (eq? resolved id)))))
 
 (define (identifier-is-transformer env stx)
@@ -123,7 +123,7 @@
     (cond
       ((not (pair? stx)) #f)
       ((not (identifier? (car stx))) #f)
-      ((hashmap-ref/default env (resolve (car stx)) #f)
+      ((hashmap-ref/default env (car stx) #f)
        => (lambda (return)
             (and (transformer? return) return)))
       (else #f))))
@@ -202,7 +202,7 @@
          (list (empty-wrap 'lambda)
                renamed
                (expand-expr
-                (hashmap-set env (resolve renamed) 'variable)
+                (hashmap-set env renamed 'variable)
                 (add-substitution body bound renamed)))))
       ((is? env stx 'let-syntax)
        (let-syntax-expander env stx expand-expr))
@@ -246,7 +246,7 @@
   (let ((stx (unwrap-syntax stx)))
     (cond
       ((identifier? stx)
-       (hashmap-ref env (resolve stx) (lambda () (error "transformer not found" stx))))
+       (hashmap-ref env stx (lambda () (error "transformer not found" stx))))
       ((identifier-is-transformer env stx)
        => (lambda (tfmr)
             (macro-expand-expander (syntax->datum (syntax-car stx))
@@ -299,7 +299,7 @@
        (let* ((stx (unwrap-list stx))
               (name (syntax-cxr '(d a) stx))
               (tfmr (expand-transformer env (syntax-cxr '(d d a) stx))))
-         (values (hashmap-set globalenv (resolve name) tfmr) '())))
+         (values (hashmap-set globalenv name tfmr) '())))
       ((is? env stx 'splicing-let-syntax)
        (let*-values (((old-names new-names tfmrs body)
                       (on-bindings stx))
@@ -324,7 +324,7 @@
       ((is? env stx 'define)
        (let* ((name (syntax-cxr '(d a) stx))
               (expanded-value (expand-expr env (syntax-cxr '(d d a) stx))))
-         (values (hashmap-adjoin globalenv (resolve name) 'variable)
+         (values (hashmap-adjoin globalenv name 'variable)
                  (list (list (empty-wrap 'define)
                              name
                              expanded-value)))))

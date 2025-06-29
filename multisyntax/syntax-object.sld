@@ -23,6 +23,7 @@
   (export generate-lexical-location generate-lexical-locations
           lexical-location->string lexical-location-comparator
           bound-identifier-comparator location-comparator
+          free-identifier-comparator
           ;; Misc. predicates
           self-syntax? syntax?
           ;; Operations on wraps

@@ -21,10 +21,10 @@
                    (expand initial-environment
                            (list (empty-wrap (quote inputs)) ...))))
        (test-equal name
+                   (quote output)
                    (map (lambda (term)
                           (debruijnize global-map term '()))
-                        expanded-list)
-                   (quote output))))))
+                        expanded-list))))))
 
 (define (test-expander)
   (test-alpha "identity"
@@ -32,19 +32,25 @@
               ((lambda 0)))
   (test-alpha "let-syntax of identifier"
               ((let-syntax ((λ lambda))
-                 (λ x x)))
+                 (λ x x))
+               (λ x x))
+              ((lambda 0)
+               (λ x x)))
+  (test-alpha "define-syntax of identifier"
+              ((define-syntax λ lambda)
+               (λ x x))
               ((lambda 0)))
   (test-alpha "lexical renaming of keywords"
               ((lambda lambda (lambda lambda)))
               ((lambda (0 0))))
-  (test-alpha "simple define-syntax"
+  (test-alpha "simple syntax-rules"
               ((define-syntax let
                  (syntax-rules ()
                    ((let ((name value)) body)
                     ((lambda name body) value))))
                (let ((x (f y))) (f x)))
               (((lambda (f 0)) (f y))))
-  (test-alpha "define-syntax with ellipsis"
+  (test-alpha "syntax-rules with ellipsis"
               ((define-syntax let
                  (syntax-rules ()
                    ((let ((name value)) body)
@@ -61,9 +67,19 @@
                             ((lambda (if 0
                                          0
                                          ((lambda (if 0
-                                                     0
-                                                     false))
-                                          b))) tmp))) a))))
+                                                      0
+                                                      false))
+                                          b))) tmp))) a)))
+  (test-alpha "splicing-let-syntax"
+              ((splicing-let-syntax ((λ lambda))
+                 (define-syntax lambda
+                   (syntax-rules ()
+                     ((_ (name) body) (λ name body))
+                     ((_ (name rest ...) body)
+                      (λ name (lambda (rest ...) body)))
+                     ((_ name body) (λ name body)))))
+               (lambda (x y) (x y)))
+              ((lambda (lambda (1 0))))))
 
 (define (test-untyped-lambda-calculus)
   (test-group "untyped lambda calculus"
