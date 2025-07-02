@@ -13,6 +13,9 @@
  | limitations under the License.
  |------------------------------------------------------------------------
  | Example implementation of macros for an untyped lambda calculus.
+ | NOTE: `define-syntax` is deliberately different from RNRS, because
+ | `define-syntax`, in effect, modifies bindings in the global syntatic
+ | environment: it does not create new bindings.
  |
  | Syntax of the core:
  |
@@ -53,6 +56,12 @@
 
 (define (empty-map) (hashmap free-identifier-comparator))
 
+(define (inject-primitive name)
+  (let ((id (generate-identifier name)))
+    (add-substitution id
+                      id
+                      (generate-lexical-location name name))))
+
 (define initial-environment
   (hashmap free-identifier-comparator
            (empty-wrap 'lambda) 'lambda
@@ -68,9 +77,9 @@
   ;; Convert the exact non-negative integer `stx` into a Church numeral.
   (let ((function (generate-identifier 'f))
         (argument (generate-identifier 'x)))
-    (list (empty-wrap 'lambda)
+    (list (inject-primitive 'lambda)
           function
-          (list (empty-wrap 'lambda)
+          (list (inject-primitive'lambda)
                 argument
                 (let loop ((i stx))
                   (if (zero? i)
@@ -206,10 +215,7 @@
                         bound
                         (generate-lexical-location (syntax->datum bound) 'variable)))
               (body (syntax-cxr '(d d a) stx)))
-         ;; Note: `(empty-wrap lambda)` (the top level lambda) might be
-         ;; bound to something else. Use the thing that currently evaluates
-         ;; to a real lambda (the head of the current invocation).
-         (list (car stx)
+         (list (inject-primitive 'lambda)
                renamed
                (expand-expr env (add-substitution body bound renamed)))))
       ((is? env stx 'let-syntax)
@@ -353,7 +359,7 @@
        (let* ((name (syntax-cxr '(d a) stx))
               (expanded-value (expand-expr env (syntax-cxr '(d d a) stx))))
          (values (hashmap-set env name 'variable)
-                 (list (list (empty-wrap 'define)
+                 (list (list (inject-primitive 'define)
                              name
                              expanded-value)))))
       ((identifier-is-transformer env stx)
