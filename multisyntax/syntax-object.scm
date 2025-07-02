@@ -46,10 +46,16 @@
 ;;; Locations and substitutions
 
 (define-record-type <lexical-location>
-  (raw-lexical-location symbol value)
+  (raw-lexical-location symbol id value)
   lexical-location?
   (symbol lexical-location->symbol)
-  (value lexical-location->unique-id))
+  (id lexical-location->unique-id)
+  (value lexical-location-value %set-lexical-location-value!))
+
+(define (set-lexical-location-value! ll value)
+  (if (lexical-location-value ll)
+      (error "lexical location already has a value" ll)
+      (%set-lexical-location-value! ll value)))
 
 (define lexical-location-comparator
   (make-comparator
@@ -62,9 +68,11 @@
         (lexical-location->unique-id y)))
    (lambda (x) (number-hash (lexical-location->unique-id x)))))
 
-(define (generate-lexical-location symbol)
-  (raw-lexical-location symbol
-                        (generate-unique-integer)))
+(define generate-lexical-location
+  (case-lambda
+    ((symbol) (generate-lexical-location symbol #f))
+    ((symbol value)
+     (raw-lexical-location symbol (generate-unique-integer) value))))
 
 (define (generate-lexical-locations list)
   (do ((acc (list-accumulator))

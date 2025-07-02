@@ -22,6 +22,8 @@
           (multisyntax utils))
   (export generate-lexical-location generate-lexical-locations
           lexical-location->string lexical-location-comparator
+          lexical-location?
+          lexical-location-value set-lexical-location-value!
           bound-identifier-comparator location-comparator
           free-identifier-comparator
           ;; Misc. predicates

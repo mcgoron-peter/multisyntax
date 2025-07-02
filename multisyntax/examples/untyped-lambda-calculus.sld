@@ -15,7 +15,7 @@
 
 (define-library (multisyntax examples untyped-lambda-calculus)
   (import (scheme base) (scheme write)
-          (srfi 1) (srfi 146 hash)
+          (srfi 1) (srfi 26) (srfi 146 hash)
           (multisyntax syntax-object)
           (multisyntax pattern matcher)
           (multisyntax pattern producer))
