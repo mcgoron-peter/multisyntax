@@ -31,14 +31,3 @@
 (load "examples/untyped-lambda-calculus.sld")
 (import (multisyntax examples untyped-lambda-calculus test))
 (test-untyped-lambda-calculus)
-
-#;(let-values (((global-map expanded-list)
-              (expand initial-environment
-                      (list (empty-wrap '(define I (lambda x x)))
-                            (empty-wrap '(I (lambda I I)))))))
-  (display (alpha expanded-list)) (newline))
-
-#;(begin
-  (load "examples/untyped-lambda-calculus.sld")
-  (import (multisyntax examples untyped-lambda-calculus test))
-  (test-untyped-lambda-calculus))

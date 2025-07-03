@@ -13,6 +13,21 @@
  | limitations under the License.
  |#
 
+(define (curry-form form)
+  (cond
+    ((and (pair? form)
+          (eq? (car form) 'lambda))
+     (list 'lambda (curry-form (cadr form))))
+    ((and (pair? form)
+          (> (length form) 2))
+     (curry-form (cons (list (list-ref form 0)
+                             (list-ref form 1))
+                       (list-tail form 2))))
+    ((pair? form)
+     (list (curry-form (list-ref form 0))
+           (curry-form (list-ref form 1))))
+    (else form)))
+
 (define-syntax test-alpha
   (syntax-rules ()
     ((test-alpha name (inputs ...) output)
@@ -21,7 +36,7 @@
                    (expand initial-environment
                            (list (empty-wrap (quote inputs)) ...))))
        (test-equal name
-                   (quote output)
+                   (map curry-form (quote output))
                    (map (lambda (term)
                           (debruijnize global-map term '()))
                         expanded-list))))))

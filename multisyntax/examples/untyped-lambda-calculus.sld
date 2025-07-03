@@ -14,10 +14,11 @@
  |#
 
 (define-library (multisyntax examples untyped-lambda-calculus)
-  (import (scheme base) (scheme write)
+  (import (scheme base) (scheme write) (scheme cxr)
           (srfi 1) (srfi 26) (srfi 146 hash)
           (multisyntax syntax-object)
           (multisyntax pattern matcher)
           (multisyntax pattern producer))
-  (export expand transformer? initial-environment alpha debruijnize)
+  (export expand transformer? initial-environment alpha
+          debruijnize)
   (include "untyped-lambda-calculus.scm"))

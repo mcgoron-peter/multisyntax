@@ -413,6 +413,14 @@
        => cdr)
       ((identifier? stx) (syntax->datum stx))
       ((pair? stx)
-       (cons (debruijnize env (car stx) free-variables)
-             (debruijnize env (cdr stx) free-variables)))
+       (let ((function (debruijnize env (car stx) free-variables))
+             (argument (debruijnize env
+                                    (syntax-cxr '(d a) stx)
+                                    free-variables))
+             (rest (syntax-cxr '(d d) stx)))
+         (if (null? rest)
+             (list function argument)
+             (debruijnize env
+                          (cons (list function argument) rest)
+                          free-variables))))
       (else stx))))
