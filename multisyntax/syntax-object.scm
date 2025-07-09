@@ -75,10 +75,11 @@
      (raw-lexical-location symbol (generate-unique-integer) value))))
 
 (define (generate-lexical-locations list)
-  (do ((acc (list-accumulator))
-       (list (unwrap-list list) (cdr list)))
-      ((null? list) (acc (eof-object)))
-    (acc (generate-lexical-location (syntax->datum (car list))))))
+  (syntax-list-map (lambda (id)
+                     (if (not (identifier? id))
+                         (error "list is not made up of identifiers" id list)
+                         (generate-lexical-location (syntax->datum id))))
+                   list))
 
 (define (lexical-location->string ll)
   (string-append (symbol->string (lexical-location->symbol ll))
@@ -183,23 +184,30 @@
   ;; An identifier is a wrapped symbol.
   (and (wrap? obj) (symbol? (wrap->expr obj))))
 
+(define (wrap-map f %stx)
+  ;; Operate `f` on the wrapped syntax objects of `%stx`, returning the
+  ;; syntax object.
+  (let loop ((stx %stx))
+    (cond
+      ((pair? stx) (cons (loop (car stx)) (loop (cdr stx))))
+      ((vector? stx) (vector-map loop stx))
+      ((self-syntax? stx) stx)
+      ((wrap? stx) (f stx))
+      (else (error "not a syntax object" %stx)))))
+
 (define (add-timestamp stx ts)
   ;; Adds a timestamp to the syntax object `stx`. If the timestamp is
   ;; already in the wrap, the timestamp is removed instead.
-  (cond
-    ((pair? stx) (cons (add-timestamp (car stx) ts)
-                       (add-timestamp (cdr stx) ts)))
-    ((vector? stx) (vector-map (cut add-timestamp <> ts) stx))
-    ((self-syntax? stx) stx)
-    ((wrap? stx)
-     (let* ((timestamps (wrap->timestamps stx))
-            (timestamps (if (set-contains? timestamps ts)
-                            (set-delete timestamps ts)
-                            (set-adjoin timestamps ts))))
-       (raw-wrap (wrap->expr stx)
-                 timestamps
-                 (wrap->environment stx)
-                 (wrap->inverse-environment stx))))))
+  (define (add-timestamp stx)
+    (let* ((timestamps (wrap->timestamps stx))
+           (timestamps (if (set-contains? timestamps ts)
+                           (set-delete timestamps ts)
+                           (set-adjoin timestamps ts))))
+      (raw-wrap (wrap->expr stx)
+                timestamps
+                (wrap->environment stx)
+                (wrap->inverse-environment stx))))
+  (wrap-map add-timestamp stx))
 
 (define (resolve id)
   ;; Get the location that `id` ultimately resolves to.
@@ -253,29 +261,20 @@
   ;; 
   ;; If `location-to` is an identifier, the location that it resolves to
   ;; is added as a substitution.
-  (cond
-    ((pair? stx) (cons (add-substitution (car stx)
-                                         id
-                                         location-to)
-                       (add-substitution (cdr stx)
-                                         id
-                                         location-to)))
-    ((vector? stx) (vector-map (cut add-substitution <> id location-to)
-                               stx))
-    ((self-syntax? stx) stx)
-    (else
-     (let operate ((id id)
-                   (location-to location-to)
-                   (stx stx))
-       (cond
-         ((pair? location-to)
-          (fold operate stx id location-to))
-         ((identifier? location-to)
-          (operate id (resolve location-to) stx))
-         ((not (set=? (wrap->timestamps stx) (wrap->timestamps id)))
-          stx)
-         (else
-          (add-timestamps/same-wrap stx id location-to)))))))
+  (define (add-substitution stx)
+    (let operate ((id id)
+                  (location-to location-to)
+                  (stx stx))
+      (cond
+        ((pair? location-to)
+         (fold operate stx id location-to))
+        ((identifier? location-to)
+         (operate id (resolve location-to) stx))
+        ((not (set=? (wrap->timestamps stx) (wrap->timestamps id)))
+         stx)
+        (else
+         (add-timestamps/same-wrap stx id location-to)))))
+  (wrap-map add-substitution stx))
 
 (define (generate-unique-symbol)
   ;; Tries as best as possible to generate a unique symbol. Not read/write
@@ -296,20 +295,22 @@
     (() (generate-identifier (generate-unique-symbol)))
     ((symbol)
      (when (not (symbol? symbol))
-       (error "generate-symbol requires symbol" symbol))
+       (error "not a symbol" symbol))
      (raw-wrap symbol
                (set timestamp-comparator (generate-unique-integer))
                (mapping location-comparator)
                (mapping location-comparator)))))
 
-(define (generate-temporaries lst)
-  ;; Generate a list of identifiers from `generate-identifier`.
-  (do ((acc (list-accumulator))
-       (lst (unwrap-list lst) (cdr lst)))
-      ((null? lst) (acc (eof-object)))
-    (if (identifier? (car lst))
-        (acc (generate-identifier (syntax->datum (car lst))))
-        (acc (generate-identifier)))))
+(define (generate-temporaries list)
+  ;; Generate a list of identifiers using `generate-identifier`.
+  (syntax-list-map (lambda (x)
+                     (cond
+                       ((symbol? x)
+                        (generate-identifier x))
+                       ((identifier? x)
+                        (generate-identifier (syntax->datum x)))
+                       (else (generate-identifier))))
+                   list))
 
 (define (symbolic-identifier=? id1 id2)
   ;; Returns true if the underlying symbol of each identifier is the same.
@@ -385,12 +386,11 @@
 
 (define (syntax->datum stx)
   ;; Remove wraps from the syntax object.
-  (cond
-    ((pair? stx) (cons (syntax->datum (car stx))
-                       (syntax->datum (cdr stx))))
-    ((vector? stx) (vector-map syntax->datum stx))
-    ((wrap? stx) (syntax->datum (wrap->expr stx)))
-    (else stx)))
+  (wrap-map (lambda (stx)
+               (if (identifier? stx)
+                   (wrap->expr stx)
+                   (syntax->datum (wrap->expr stx))))
+             stx))
 
 (define (if-contains-wrap operate obj)
   ;; If `obj` does not contain a wrapped syntax object, return `#f`.
@@ -456,26 +456,65 @@
     ((if-contains-wrap operate datum) => values)
     (else (push-wrap context-id datum))))
 
-(define (syntax-cxr list stx)
-  (if (null? list)
-      stx
-      (let ((stx (unwrap-syntax stx)))
-        (case (car list)
-          ((a) (syntax-cxr (cdr list) (car stx)))
-          ((d) (syntax-cxr (cdr list) (cdr stx)))
-          (else (error "invalid accessor" list stx))))))
+(define (syntax-cxr %list %stx)
+  (let loop ((list %list) (stx (unwrap-syntax %stx)))
+    (cond
+      ((null? list) stx)
+      ((not (pair? list))
+       (error "accessor is not a list" %list %stx))
+      ((not (pair? stx))
+       (error "not a pair" %list %stx))
+      (else (case (car list)
+              ((a) (syntax-cxr (cdr list) (unwrap-syntax (car stx))))
+              ((d) (syntax-cxr (cdr list) (unwrap-syntax (cdr stx))))
+              (else (error "invalid accessor" %list %stx)))))))
 
-(define (syntax-car stx) (syntax-cxr '(a) stx))
-(define (syntax-cdr stx) (syntax-cxr '(d) stx))
+(define (syntax-car stx)
+  (let ((stx (unwrap-syntax stx)))
+    (cond
+      ((not (pair? stx)) (error "not a pair" stx))
+      (else (car stx)))))
 
-(define (syntax-list-tail stx n)
-  (cond
-    ((negative? n) (error "domain error" n))
-    ((zero? n) (unwrap-syntax stx))
-    (else (syntax-list-tail (syntax-cdr stx) (- n 1)))))
+(define (syntax-cdr stx)
+  (let ((stx (unwrap-syntax stx)))
+    (cond
+      ((not (pair? stx)) (error "not a pair" stx))
+      (else (cdr stx)))))
+
+(define (syntax-list-tail %stx %n)
+  (unless (and (exact-integer? %n) (not (negative? %n)))
+    (error "invalid number" %n))
+  (let loop ((stx %stx) (n %n))
+    (if (zero? n)
+        stx
+        (loop (syntax-cdr stx) (- n 1)))))
 
 (define (syntax-list-ref stx n)
-  (unwrap-syntax (car (syntax-list-tail stx n))))
+  (car (unwrap-syntax (syntax-list-tail stx n))))
+
+(define (syntax-list-fold kons knil %list)
+  (let loop ((list (unwrap-syntax %list))
+             (knil knil))
+    (cond
+      ((null? list) knil)
+      ((not (pair? list)) (error "not a list" %list))
+      (else (loop (unwrap-syntax (cdr list)) (kons (car list) knil))))))
+
+(define (syntax-list-fold-right kons knil %list)
+  (let loop ((list (unwrap-syntax %list)))
+    (cond
+      ((null? list) knil)
+      ((not (pair? list)) (error "not a list" %list))
+      (else (kons (car list) (loop (unwrap-syntax (cdr list))))))))
+
+(define (syntax-list-map f list)
+  (syntax-list-fold-right (lambda (value rest)
+                            (cons (f value) rest))
+                          '()
+                          list))
+
+(define (syntax-list-for-each f list)
+  (syntax-list-fold (lambda (value _) (f value)) #f list))
 
 (define (unwrap-list stx)
   (let ((stx (unwrap-syntax stx)))
