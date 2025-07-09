@@ -35,6 +35,7 @@
           ;; Non-standard procedures that can be defined in terms of
           ;; Macrological Fascile procedures
           syntax-cxr syntax-car syntax-cdr unwrap-list
+          syntax-list-tail syntax-list-ref
           ;; Standard operations
           symbolic-identifier=? free-identifier=? bound-identifier=?
           identifier?

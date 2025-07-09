@@ -468,6 +468,15 @@
 (define (syntax-car stx) (syntax-cxr '(a) stx))
 (define (syntax-cdr stx) (syntax-cxr '(d) stx))
 
+(define (syntax-list-tail stx n)
+  (cond
+    ((negative? n) (error "domain error" n))
+    ((zero? n) (unwrap-syntax stx))
+    (else (syntax-list-tail (syntax-cdr stx) (- n 1)))))
+
+(define (syntax-list-ref stx n)
+  (unwrap-syntax (car (syntax-list-tail stx n))))
+
 (define (unwrap-list stx)
   (let ((stx (unwrap-syntax stx)))
     (if (pair? stx)

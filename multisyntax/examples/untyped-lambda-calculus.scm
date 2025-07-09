@@ -1,5 +1,5 @@
 #| Copyright (c) Peter McGoron 2025
-|
+ |
  | Licensed under the Apache License, Version 2.0 (the "License");
  | you may not use this file except in compliance with the License.
  | You may obtain a copy of the License at
@@ -54,9 +54,16 @@
   transformer?
   (clauses unwrap-syntax-rules))
 
+(define-record-type <value>
+  ;; Record to distinguish values from syntatic bindings.
+  (wrap-value value)
+  value?
+  (value unwrap-value))
+
 (define (empty-map) (hashmap free-identifier-comparator))
 
 (define (inject-primitive name)
+  ;; Create an identifier resolving to the primitive `name` (a symbol).
   (let ((id (generate-identifier name)))
     (add-substitution id
                       id
@@ -72,20 +79,6 @@
            (empty-wrap 'let-syntax) 'let-syntax
            (empty-wrap 'letrec-syntax) 'letrec-syntax
            (empty-wrap 'syntax-rules) 'syntax-rules))
-
-(define (church-numeral stx)
-  ;; Convert the exact non-negative integer `stx` into a Church numeral.
-  (let ((function (generate-identifier 'f))
-        (argument (generate-identifier 'x)))
-    (list (inject-primitive 'lambda)
-          function
-          (list (inject-primitive'lambda)
-                argument
-                (let loop ((i stx))
-                  (if (zero? i)
-                      argument
-                      (list function
-                            (loop (- i 1)))))))))
 
 (define (union-names env new-names tfmrs)
   ;; Add `new-names` bound to `tfmrs` in `env`, overriding previous
@@ -147,6 +140,8 @@
             (syntax-cxr '(d d) stx))))
 
 (define (set-names-to-transformers! new-names tfmrs)
+  ;; Set the lexical location values of `new-names` to each transformer
+  ;; in `tfmrs`.
   (for-each (lambda (new-name tfmr)
               (set-lexical-location-value! (resolve new-name) tfmr))
             new-names tfmrs))
@@ -163,7 +158,7 @@
     (K old-names new-names body)))
 
 (define (letrec-syntax-expander env stx K)
-  ;; CPS expansion of `letrec-syntax`. See `let-syntax-expander`.
+  ;; CPS `letrec-syntax`. See `let-syntax-expander`.
   (let*-values (((old-names new-names tfmrs body) (on-bindings stx))
                 ((tfmrs)
                  (map (lambda (stx)
@@ -204,8 +199,6 @@
   ;; Expander of expressions (not toplevel statements).
   (let ((stx (unwrap-syntax stx)))
     (cond
-      ((and (exact-integer? stx) (positive? stx))
-       (church-numeral stx))
       ((self-syntax? stx) stx)
       ((identifier? stx) stx)
       ((is? env stx 'lambda)
@@ -269,6 +262,7 @@
     (wrap-syntax-rules (map operate clauses))))
 
 (define (expand-transformer env stx)
+  ;; Expand a transformer.
   (let ((stx (unwrap-syntax stx)))
     (cond
       ((identifier? stx)
@@ -385,6 +379,8 @@
   (fold initenv (unwrap-list stx) '()))
 
 (define (alpha stx)
+  ;; Alpha-convert `stx` into pure lambda terms. Free identifiers are not
+  ;; substituted.
   (let ((stx (unwrap-syntax stx)))
     (cond
       ((pair? stx) (cons (alpha (car stx)) (alpha (cdr stx))))
@@ -396,6 +392,7 @@
       (else stx))))
 
 (define (debruijnize env stx free-variables)
+  ;; Convert `stx` to a debruijn form. Free identifiers are not substituted.
   (let ((stx (unwrap-syntax stx)))
     (cond
       ((is? env stx 'lambda)
@@ -424,3 +421,101 @@
                           (cons (list function argument) rest)
                           free-variables))))
       (else stx))))
+
+;;; "Demonstrating Lambda Calculus Reduction", Peter Sestoft.
+;;; https://studwww.itu.dk/~sestoft/papers/sestoft-lamreduce.pdf
+;;; 
+;;; The evaulator is a big-step normal-order evaluator following
+;;; Peter Sestoft's evaluator, which defines normal order evaluation
+;;; using call-by-name big-step evaluation.
+
+(define (eval-identifier expr env)
+  (hashmap-ref env
+               expr
+               (lambda () (error "unbound variable" expr))
+               (lambda (x)
+                 (cond
+                   ((eq? x 'variable) expr)
+                   ((identifier? x)
+                    (eval-identifier x env))
+                   ((symbol? x)
+                    (error "unbound variable" expr))
+                   ((transformer? x)
+                    (error "variable is syntactic" expr))
+                   (else x)))))
+
+(define (unfold-lambda expr)
+  (values (syntax-list-ref expr 1)
+          (syntax-list-ref expr 2)))
+
+(define (unfold-application expr)
+  (values (syntax-list-ref expr 0)
+          (syntax-list-ref expr 1)
+          (syntax-list-tail expr 2)))
+
+(define (eval-to-weak-head-normal-form expr env)
+  (cond
+    ((identifier? expr) (eval-identifier expr env))
+    ((is? env expr 'lambda) expr)
+    ((pair? (unwrap-syntax expr))
+     (let*-values (((function argument rest)
+                    (unfold-application expr))
+                   ((function) (eval-to-weak-head-normal-form
+                                function
+                                env)))
+       (if (is? env function 'lambda)
+           (let*-values (((formal function-body)
+                          (unfold-lambda function))
+                         ((result)
+                          (eval-to-weak-head-normal-form
+                           function-body
+                           (hashmap-set env formal argument))))
+             (if (null? rest)
+                 result
+                 (eval-to-weak-head-normal-form (cons result rest)
+                                                env))))))))
+
+(define (eval-expr expr env)
+  (cond
+    ((identifier? expr) (eval-identifier expr env))
+    ((is? env expr 'lambda)
+     (let-values (((formal body) (unfold-lambda expr)))
+       (list (syntax-list-ref expr 0)
+             formal
+             (eval-expr body
+                        (hashmap-set env formal 'variable)))))
+    ((pair? (unwrap-syntax expr))
+     (let*-values (((function argument rest) (unfold-application expr))
+                   ((function) (eval-to-weak-head-normal-form function env)))
+       (if (is? env function 'lambda)
+           (let*-values (((formal body) (unfold-lambda function))
+                         ((result) (eval-expr body
+                                              (hashmap-set env formal argument))))
+             (if (null? rest)
+                 result
+                 (eval-expr (cons result rest) env)))
+           (map (lambda (expr) (eval-expr expr env))
+                (cons* function argument (unwrap-list rest))))))
+    (else expr)))
+
+(define (expanded-eval1 expr env)
+  (cond
+    ((is? env expr 'define)
+     (values #f (hashmap-set env
+                             (syntax-cxr '(d a) expr)
+                             (expanded-eval1 (syntax-cxr '(d d a) expr)
+                                             env))))
+    (else (values (eval-expr expr env) env))))
+
+(define (lceval exprs env)
+  (let-values (((env exprs) (expand env exprs)))
+    (let loop ((exprs exprs)
+               (env env)
+               (acc '()))
+      (if (null? exprs)
+          (values (reverse acc) env)
+          (let-values (((normal-form env)
+                        (expanded-eval1 (car exprs) env)))
+            (loop (cdr exprs)
+                  env
+                  (cons normal-form acc)))))))

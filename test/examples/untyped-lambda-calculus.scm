@@ -96,7 +96,66 @@
                (lambda (x y) (x y)))
               ((lambda (lambda (1 0))))))
 
+(define-syntax test-eval-alpha
+  (syntax-rules ()
+    ((_ name (inputs ...) outputs)
+     (let-values (((expanded-list global-map)
+                   (lceval (list (empty-wrap (quote inputs)) ...)
+                           initial-environment)))
+       (test-equal name
+                   (map curry-form (quote outputs))
+                   (map (lambda (term)
+                          (debruijnize global-map term '()))
+                        expanded-list))))))
+
+(define (test-eval)
+  (test-eval-alpha "identity evals to itself"
+                   ((lambda x x))
+                   ((lambda 0)))
+  (test-eval-alpha "identity applied to itself"
+                   (((lambda x x) (lambda x x)))
+                   ((lambda 0)))
+  (test-eval-alpha "define returns nothing"
+                   ((define I (lambda x x)))
+                   (#f))
+  (test-eval-alpha "global environment lookup"
+                   ((define I (lambda x x))
+                    I)
+                   (#f
+                    (lambda 0)))
+  (test-eval-alpha "K combinator, 1"
+                   ((define K (lambda x (lambda y x)))
+                    (define I (lambda x x))
+                    (K I I))
+                   (#f
+                    #f
+                    (lambda 0)))
+  (test-eval-alpha "K combinator, 2"
+                   ((define K (lambda x (lambda y x)))
+                    (define I (lambda x x))
+                    (K I K))
+                   (#f #f (lambda 0)))
+  (test-eval-alpha "K combinator, 3"
+                   ((define K (lambda x (lambda y x)))
+                    (define I (lambda x x))
+                    (K K I))
+                   (#f #f (lambda (lambda 1))))
+  (test-eval-alpha "define-syntax"
+                   ((define-syntax λ
+                      (syntax-rules ()
+                        ((λ (x) body)
+                         (lambda x body))
+                        ((λ (x y ...) body)
+                         (lambda x (λ (y ...) body)))))
+                    (define true (λ (x y) x))
+                    (define false (λ (x y) y))
+                    (false false true))
+                   (#f #f (lambda (lambda 1)))))
+
 (define (test-untyped-lambda-calculus)
   (test-group "untyped lambda calculus"
-    (test-expander)))
+    (test-group "expander"
+      (test-expander))
+    (test-group "eval"
+      (test-eval))))
 

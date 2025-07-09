@@ -20,5 +20,5 @@
           (multisyntax pattern matcher)
           (multisyntax pattern producer))
   (export expand transformer? initial-environment alpha
-          debruijnize)
+          debruijnize lceval)
   (include "untyped-lambda-calculus.scm"))
