@@ -78,7 +78,8 @@
            (empty-wrap 'splicing-letrec-syntax) 'splicing-letrec-syntax
            (empty-wrap 'let-syntax) 'let-syntax
            (empty-wrap 'letrec-syntax) 'letrec-syntax
-           (empty-wrap 'syntax-rules) 'syntax-rules))
+           (empty-wrap 'syntax-rules) 'syntax-rules
+           (empty-wrap 'syntax-error) 'syntax-error))
 
 (define (union-names env new-names tfmrs)
   ;; Add `new-names` bound to `tfmrs` in `env`, overriding previous
@@ -201,6 +202,8 @@
     (cond
       ((self-syntax? stx) stx)
       ((identifier? stx) stx)
+      ((is? env stx 'syntax-error)
+       (error "macro syntax error" (syntax->datum (syntax-list-tail stx 1))))
       ((is? env stx 'lambda)
        (let* ((bound (syntax-cxr '(d a) stx))
               (renamed (add-substitution
@@ -265,6 +268,8 @@
   ;; Expand a transformer.
   (let ((stx (unwrap-syntax stx)))
     (cond
+      ((is? env stx 'syntax-error)
+       (error "macro syntax error" (syntax->datum (syntax-list-tail stx 1))))
       ((identifier? stx)
        (let ((value (resolve stx)))
          (if (lexical-location? value)
@@ -330,6 +335,8 @@
   ;; `env`.
   (let ((stx (unwrap-syntax stx)))
     (cond
+      ((is? env stx 'syntax-error)
+       (error "macro syntax error" (syntax->datum (syntax-list-tail stx 1))))
       ((is? env stx 'define-syntax)
        (let* ((stx (unwrap-list stx))
               (name (syntax-cxr '(d a) stx))
@@ -350,8 +357,8 @@
           (accumulate-splicing env
                                (add-substitution body old-names new-names)))))
       ((is? env stx 'define)
-       (let* ((name (syntax-cxr '(d a) stx))
-              (expanded-value (expand-expr env (syntax-cxr '(d d a) stx))))
+       (let* ((name (syntax-list-ref stx 1))
+              (expanded-value (expand-expr env (syntax-list-ref stx 2))))
          (values (hashmap-set env name 'variable)
                  (list (list (inject-primitive 'define)
                              name
@@ -501,10 +508,13 @@
 (define (expanded-eval1 expr env)
   (cond
     ((is? env expr 'define)
+     ;; Use weak-head normal form instead of normal order to allow for
+     ;; definitions of useful combinators without normal forms (like `Y`).
      (values #f (hashmap-set env
-                             (syntax-cxr '(d a) expr)
-                             (expanded-eval1 (syntax-cxr '(d d a) expr)
-                                             env))))
+                             (syntax-list-ref expr 1)
+                             (eval-to-weak-head-normal-form
+                              (syntax-list-ref expr 2)
+                              env))))
     (else (values (eval-expr expr env) env))))
 
 (define (lceval exprs env)
@@ -518,4 +528,22 @@
                         (expanded-eval1 (car exprs) env)))
             (loop (cdr exprs)
                   env
-                  (cons normal-form acc)))))))
+                  (if normal-form
+                      (cons normal-form acc)
+                      acc)))))))
+
+(define current-environment (make-parameter initial-environment box))
+
+(define (lcrepl)
+  (let ((expr (read)))
+    (unless (eof-object? expr)
+      (display (list "expanding" expr)) (newline)
+      (let-values (((exprs newmap)
+                    (lceval (list (empty-wrap expr)) (unbox (current-environment)))))
+        (set-box! (current-environment) newmap)
+        (when (not (null? exprs))
+          (display (list "result: " (syntax->datum (list-ref exprs 0))))
+          (newline))
+        (lcrepl)))))
+
+(define (lcload file) (with-input-from-file file lcrepl))

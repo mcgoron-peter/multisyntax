@@ -31,3 +31,6 @@
 (load "examples/untyped-lambda-calculus.sld")
 (import (multisyntax examples untyped-lambda-calculus test))
 (test-untyped-lambda-calculus)
+
+(import (multisyntax examples untyped-lambda-calculus))
+(lcload "/home/user/Documents/code/scheme/multisyntax/multisyntax/examples/untyped-lambda-calculus-prelude.scm")

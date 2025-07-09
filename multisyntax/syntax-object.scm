@@ -193,7 +193,7 @@
       ((vector? stx) (vector-map loop stx))
       ((self-syntax? stx) stx)
       ((wrap? stx) (f stx))
-      (else (error "not a syntax object" %stx)))))
+      (else (error "not a syntax object" %stx stx)))))
 
 (define (add-timestamp stx ts)
   ;; Adds a timestamp to the syntax object `stx`. If the timestamp is
@@ -386,11 +386,7 @@
 
 (define (syntax->datum stx)
   ;; Remove wraps from the syntax object.
-  (wrap-map (lambda (stx)
-               (if (identifier? stx)
-                   (wrap->expr stx)
-                   (syntax->datum (wrap->expr stx))))
-             stx))
+  (wrap-map wrap->expr stx))
 
 (define (if-contains-wrap operate obj)
   ;; If `obj` does not contain a wrapped syntax object, return `#f`.

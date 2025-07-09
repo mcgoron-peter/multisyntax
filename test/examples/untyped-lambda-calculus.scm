@@ -117,29 +117,26 @@
                    ((lambda 0)))
   (test-eval-alpha "define returns nothing"
                    ((define I (lambda x x)))
-                   (#f))
+                   ())
   (test-eval-alpha "global environment lookup"
                    ((define I (lambda x x))
                     I)
-                   (#f
-                    (lambda 0)))
+                   ((lambda 0)))
   (test-eval-alpha "K combinator, 1"
                    ((define K (lambda x (lambda y x)))
                     (define I (lambda x x))
                     (K I I))
-                   (#f
-                    #f
-                    (lambda 0)))
+                   ((lambda 0)))
   (test-eval-alpha "K combinator, 2"
                    ((define K (lambda x (lambda y x)))
                     (define I (lambda x x))
                     (K I K))
-                   (#f #f (lambda 0)))
+                   ((lambda 0)))
   (test-eval-alpha "K combinator, 3"
                    ((define K (lambda x (lambda y x)))
                     (define I (lambda x x))
                     (K K I))
-                   (#f #f (lambda (lambda 1))))
+                   ((lambda (lambda 1))))
   (test-eval-alpha "define-syntax"
                    ((define-syntax λ
                       (syntax-rules ()
@@ -150,12 +147,12 @@
                     (define true (λ (x y) x))
                     (define false (λ (x y) y))
                     (false false true))
-                   (#f #f (lambda (lambda 1))))
+                   ((lambda (lambda 1))))
   (test-eval-alpha "normal order evaluation"
                    ((define ω (lambda x (x x)))
                     (define K (lambda x (lambda y x)))
                     (K K (ω ω)))
-                   (#f #f (lambda (lambda 1)))))
+                   ((lambda (lambda 1)))))
 
 (define (test-untyped-lambda-calculus)
   (test-group "untyped lambda calculus"
