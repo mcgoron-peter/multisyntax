@@ -87,5 +87,5 @@
       ((define (name . args) body ...)
        (define name (rec (name . args) body ...)))
       ((define name body)
-       (%define name (letrec ((name body)) name))))))
+       (%define name (Y (λ (name) body)))))))
 

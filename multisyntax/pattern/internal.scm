@@ -119,12 +119,14 @@
   ;; Returns (values has-ellipsis? next). `has-ellipsis?` is true if the
   ;; pair is an ellipsis pattern, and false otherwise. `next` is the next
   ;; pattern that will be matched.
-  (if (null? patcdr)
-      (values #f patcdr)
-      (let ((patcadr (unwrap-syntax (car patcdr))))
-        (if (actual-ellipsis? patcadr)
-            (values #t (cdr patcdr))
-            (values #f patcdr)))))
+  (cond
+    ((null? patcdr) (values #f patcdr))
+    ((not (pair? patcdr)) (values #f patcdr))
+    (else
+     (let ((patcadr (unwrap-syntax (car patcdr))))
+       (if (actual-ellipsis? patcadr)
+           (values #t (cdr patcdr))
+           (values #f patcdr))))))
 
 (define (literal? identifier)
   (set-contains? (literals) identifier))

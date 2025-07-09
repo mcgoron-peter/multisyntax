@@ -439,7 +439,7 @@
 (define (eval-identifier expr env)
   (hashmap-ref env
                expr
-               (lambda () (error "unbound variable" expr))
+               (lambda () (error "unbound variable" (syntax->datum expr)))
                (lambda (x)
                  (cond
                    ((eq? x 'variable) expr)
@@ -537,7 +537,6 @@
 (define (lcrepl)
   (let ((expr (read)))
     (unless (eof-object? expr)
-      (display (list "expanding" expr)) (newline)
       (let-values (((exprs newmap)
                     (lceval (list (empty-wrap expr)) (unbox (current-environment)))))
         (set-box! (current-environment) newmap)
