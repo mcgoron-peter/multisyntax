@@ -150,6 +150,11 @@
                     (define true (λ (x y) x))
                     (define false (λ (x y) y))
                     (false false true))
+                   (#f #f (lambda (lambda 1))))
+  (test-eval-alpha "normal order evaluation"
+                   ((define ω (lambda x (x x)))
+                    (define K (lambda x (lambda y x)))
+                    (K K (ω ω)))
                    (#f #f (lambda (lambda 1)))))
 
 (define (test-untyped-lambda-calculus)
