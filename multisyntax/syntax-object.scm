@@ -274,7 +274,11 @@
          stx)
         (else
          (add-timestamps/same-wrap stx id location-to)))))
-  (wrap-map add-substitution stx))
+  (cond
+    ((and (null? location-to) (null? id)) stx)
+    ((or (null? location-to) (null? id))
+     (error "not both lists" location-to id))
+    (else (wrap-map add-substitution stx))))
 
 (define (generate-unique-symbol)
   ;; Tries as best as possible to generate a unique symbol. Not read/write
@@ -503,11 +507,17 @@
       ((not (pair? list)) (error "not a list" %list))
       (else (kons (car list) (loop (unwrap-syntax (cdr list))))))))
 
-(define (syntax-list-map f list)
-  (syntax-list-fold-right (lambda (value rest)
-                            (cons (f value) rest))
-                          '()
-                          list))
+(define (syntax-list-map f . %lists)
+  (let loop ((lists (map unwrap-syntax %lists)))
+    (cond
+      ((any null? lists) '())
+      ((any (lambda (x) (not (pair? x))) lists)
+       (error "not lists" %lists))
+      (else (cons (apply f (map (lambda (x)
+                                  (unwrap-syntax (syntax-car x)))
+                                lists))
+                  (loop (map (lambda (x) (unwrap-syntax (syntax-cdr x)))
+                             lists)))))))
 
 (define (syntax-list-for-each f list)
   (syntax-list-fold (lambda (value _) (f value)) #f list))

@@ -36,6 +36,8 @@
           ;; Macrological Fascile procedures
           syntax-cxr syntax-car syntax-cdr unwrap-list
           syntax-list-tail syntax-list-ref
+          syntax-list-fold syntax-list-fold-right syntax-list-map
+          syntax-list-for-each
           ;; Standard operations
           symbolic-identifier=? free-identifier=? bound-identifier=?
           identifier?

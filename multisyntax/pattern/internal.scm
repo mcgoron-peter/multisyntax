@@ -50,10 +50,9 @@
       (and (identifier? identifier)
            (free-identifier=? identifier ...))))
   (define matches-passed-ellipsis
-    ;; TODO: probably doesn't work?
     (lambda (identifier)
       (and (identifier? identifier)
-           (bound-identifier=? identifier ...))))
+           (bound-identifier=? identifier ellipsis))))
   (cond
     ((and (not ellipsis)
           (contains-as-free-identifier literals ...))

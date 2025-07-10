@@ -128,18 +128,16 @@
   ;; 3. `value ...`.
   ;; 4. `body ...`
   ;; 
-  (let* ((stx (unwrap-list stx))
-         (binders (unwrap-list (syntax-cxr '(d a) stx)))
-         (old-names (map syntax-car binders))
+  (let* ((binders (syntax-list-ref stx 1))
+         (old-names (syntax-list-map syntax-car binders))
          (new-lls (generate-lexical-locations old-names)))
     (values old-names
-            (map (lambda (old-name ll)
-                   (add-substitution old-name old-name ll))
-                 old-names
-                 new-lls)
-            (map (lambda (form) (syntax-cxr '(d a) form))
-                 binders)
-            (syntax-cxr '(d d) stx))))
+            (syntax-list-map (lambda (old-name ll)
+                               (add-substitution old-name old-name ll))
+                             old-names
+                             new-lls)
+            (syntax-list-map (lambda (form) (syntax-list-ref form 1)) binders)
+            (syntax-list-tail stx 2))))
 
 (define (set-names-to-transformers! new-names tfmrs)
   ;; Set the lexical location values of `new-names` to each transformer
@@ -178,7 +176,7 @@
   ;; producer on the matched data.
   (let loop ((tfmr (unwrap-syntax-rules tfmr)))
     (if (null? tfmr)
-        (error "no matched pattern" name stx tfmr)
+        (error "no matched pattern" name stx (syntax->datum stx) tfmr)
         (let ((matcher (caar tfmr))
               (producer (cdar tfmr)))
           (cond
@@ -247,11 +245,10 @@
   ;; Expand a `syntax-rules` transformer and wrap it as a `syntax-rules`
   ;; object.
   (define (operate clause)
-    (let*-values (((clause) (unwrap-list clause))
-                  ((literals) (unwrap-list literals))
+    (let*-values (((literals) (unwrap-list literals))
                   ((matcher bindings _)
                    (compile-pattern literals
-                                    (list-ref clause 0)
+                                    (syntax-list-ref clause 0)
                                     ellipsis))
                   ((bindings)
                    (hashmap-map (lambda (key value)
@@ -259,11 +256,10 @@
                                 bound-identifier-comparator
                                 bindings)))
       (cons matcher (compile-producer literals
-                                      (list-ref clause 1)
+                                      (syntax-list-ref clause 1)
                                       bindings
                                       ellipsis))))
-  (let ((clauses (unwrap-list clauses)))
-    (wrap-syntax-rules (map operate clauses))))
+  (wrap-syntax-rules (syntax-list-map operate clauses)))
 
 (define (expand-transformer env stx)
   ;; Expand a transformer.
@@ -286,13 +282,13 @@
                                    (cut expand-transformer <> stx))))
       ((is? env stx 'syntax-rules)
        (let ((stx (unwrap-list stx)))
-         (if (identifier? (syntax-cxr '(d a) stx))
-             (expand-syntax-rules (syntax-cxr '(d a) stx)
-                                  (syntax-cxr '(d d a) stx)
-                                  (syntax-cxr '(d d d) stx))
+         (if (identifier? (syntax-list-ref stx 1))
+             (expand-syntax-rules (syntax-list-ref stx 1)
+                                  (syntax-list-ref stx 2)
+                                  (syntax-list-tail stx 3))
              (expand-syntax-rules #f
-                                  (syntax-cxr '(d a) stx)
-                                  (syntax-cxr '(d d) stx)))))
+                                  (syntax-list-ref stx 1)
+                                  (syntax-list-tail stx 2)))))
       ;; Although one could use splicing-let-syntax and splicing-letrec-syntax
       ;; to achieve similar behavior, the splicing variants would not have the
       ;; name bound during their expansion.
@@ -340,8 +336,8 @@
        (error "macro syntax error" (syntax->datum (syntax-list-tail stx 1))))
       ((is? env stx 'define-syntax)
        (let* ((stx (unwrap-list stx))
-              (name (syntax-cxr '(d a) stx))
-              (tfmr (expand-transformer env (syntax-cxr '(d d a) stx))))
+              (name (syntax-list-ref stx 1))
+              (tfmr (expand-transformer env (syntax-list-ref stx 2))))
          (values (hashmap-set env name tfmr) '())))
       ((is? env stx 'splicing-let-syntax)
        (let-syntax-expander
@@ -553,15 +549,18 @@
     ((is? env expr 'define)
      ;; Use weak-head normal form instead of normal order to allow for
      ;; definitions of useful combinators without normal forms (like `Y`).
-     (values #f (hashmap-set env
-                             (syntax-list-ref expr 1)
-                             (eval-to-weak-head-normal-form
-                              (syntax-list-ref expr 2)
-                              env))))
+     (let ((evalto (eval-to-weak-head-normal-form
+                    (syntax-list-ref expr 2)
+                    env)))
+       (pretty (list 'define (syntax->datum (syntax-list-ref expr 1))
+                     (syntax->datum evalto)))
+       (values #f (hashmap-set env (syntax-list-ref expr 1) evalto))))
     (else (values (eval-expr expr env) env))))
 
 (define (lceval exprs env)
   (let-values (((env exprs) (expand env exprs)))
+    (display "evaluating: ")
+    (pretty (syntax->datum exprs))
     (let loop ((exprs exprs)
                (env env)
                (acc '()))
