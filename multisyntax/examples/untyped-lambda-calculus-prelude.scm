@@ -89,3 +89,6 @@
       ((define name body)
        (%define name (Y (λ (name) body)))))))
 
+(define (%cons car cdr) (λ selector (selector car cdr)))
+(define (%car pair) (pair (λ (x y) x)))
+(define (%cdr pair) (pair (λ (x y) y)))

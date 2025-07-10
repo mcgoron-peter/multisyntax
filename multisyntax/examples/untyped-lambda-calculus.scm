@@ -460,16 +460,38 @@
           (syntax-list-ref expr 1)
           (syntax-list-tail expr 2)))
 
-(define (eval-to-weak-head-normal-form expr env)
+(define (replacement-only expr env)
+  ;; TODO: Should this replace global defined free variables?
   (cond
     ((identifier? expr) (eval-identifier expr env))
-    ((is? env expr 'lambda) expr)
+    ((is? env expr 'lambda)
+     (let-values (((formal body) (unfold-lambda expr)))
+       (list (syntax-list-ref expr 0)
+             formal
+             (replacement-only body
+                               (hashmap-set env formal 'variable)))))
+    ((pair? (unwrap-syntax expr))
+     (map (lambda (x) (replacement-only x env)) expr))
+    (else expr)))
+
+(define (eval-to-weak-head-normal-form expr env)
+  (cond
+    ((identifier? expr) (let ((res (eval-identifier expr env)))
+                          (if (identifier? res)
+                              res
+                              (eval-to-weak-head-normal-form res env))))
+    ((is? env expr 'lambda)
+     (let-values (((formal body) (unfold-lambda expr)))
+       (list (syntax-list-ref expr 0)
+             formal
+             (replacement-only body (hashmap-set env formal 'variable)))))
     ((pair? (unwrap-syntax expr))
      (let*-values (((function argument rest)
                     (unfold-application expr))
                    ((function) (eval-to-weak-head-normal-form
                                 function
                                 env)))
+       (display (syntax->datum argument)) (newline)
        (if (is? env function 'lambda)
            (let*-values (((formal function-body)
                           (unfold-lambda function))
@@ -480,11 +502,15 @@
              (if (null? rest)
                  result
                  (eval-to-weak-head-normal-form (cons result rest)
-                                                env))))))))
+                                                env))))))
+    (else expr)))
 
 (define (eval-expr expr env)
   (cond
-    ((identifier? expr) (eval-identifier expr env))
+    ((identifier? expr) (let ((res (eval-identifier expr env)))
+                          (if (identifier? res)
+                              res
+                              (eval-expr res env))))
     ((is? env expr 'lambda)
      (let-values (((formal body) (unfold-lambda expr)))
        (list (syntax-list-ref expr 0)
@@ -492,17 +518,19 @@
              (eval-expr body
                         (hashmap-set env formal 'variable)))))
     ((pair? (unwrap-syntax expr))
-     (let*-values (((function argument rest) (unfold-application expr))
-                   ((function) (eval-to-weak-head-normal-form function env)))
-       (if (is? env function 'lambda)
-           (let*-values (((formal body) (unfold-lambda function))
-                         ((result) (eval-expr body
-                                              (hashmap-set env formal argument))))
-             (if (null? rest)
-                 result
-                 (eval-expr (cons result rest) env)))
-           (map (lambda (expr) (eval-expr expr env))
-                (cons* function argument (unwrap-list rest))))))
+     (let-values (((function argument rest) (unfold-application expr)))
+       (let ((function (eval-to-weak-head-normal-form function env)))
+         (if (is? env function 'lambda)
+             (let-values (((formal body) (unfold-lambda function)))
+               (let ((result (eval-expr body
+                                        (hashmap-set env formal argument))))
+                 (display (syntax->datum body)) (newline)
+                 (display (syntax->datum result)) (newline) (newline)
+                 (if (null? rest)
+                     result
+                     (eval-expr (cons result rest) env))))
+             (map (lambda (expr) (eval-expr expr env))
+                  (cons* function argument (unwrap-list rest)))))))
     (else expr)))
 
 (define (expanded-eval1 expr env)
