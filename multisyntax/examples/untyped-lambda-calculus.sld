@@ -19,6 +19,10 @@
           (multisyntax syntax-object)
           (multisyntax pattern matcher)
           (multisyntax pattern producer))
+  (cond-expand
+    (chicken-5 (import (rename (chicken pretty-print)
+                               (pp pretty))))
+    (else (import (srfi 166))))
   (export expand transformer? initial-environment alpha
           debruijnize lceval current-environment lcrepl lcload)
   (include "untyped-lambda-calculus.scm"))

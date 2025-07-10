@@ -79,7 +79,8 @@
            (empty-wrap 'let-syntax) 'let-syntax
            (empty-wrap 'letrec-syntax) 'letrec-syntax
            (empty-wrap 'syntax-rules) 'syntax-rules
-           (empty-wrap 'syntax-error) 'syntax-error))
+           (empty-wrap 'syntax-error) 'syntax-error
+           (empty-wrap 'display-no-eval) 'display-no-eval))
 
 (define (union-names env new-names tfmrs)
   ;; Add `new-names` bound to `tfmrs` in `env`, overriding previous
@@ -462,8 +463,13 @@
 
 (define (replacement-only expr env)
   ;; TODO: Should this replace global defined free variables?
+  ;; Should it only do so when actually evaling expressions, or only
+  ;; in define forms?
   (cond
-    ((identifier? expr) (eval-identifier expr env))
+    ((identifier? expr) (let ((res (eval-identifier expr env)))
+                          (if (identifier? res)
+                              res
+                              (replacement-only res env))))
     ((is? env expr 'lambda)
      (let-values (((formal body) (unfold-lambda expr)))
        (list (syntax-list-ref expr 0)
@@ -491,10 +497,10 @@
                    ((function) (eval-to-weak-head-normal-form
                                 function
                                 env)))
-       (display (syntax->datum argument)) (newline)
        (if (is? env function 'lambda)
            (let*-values (((formal function-body)
                           (unfold-lambda function))
+                         ((argument) (replacement-only argument env))
                          ((result)
                           (eval-to-weak-head-normal-form
                            function-body
@@ -504,6 +510,12 @@
                  (eval-to-weak-head-normal-form (cons result rest)
                                                 env))))))
     (else expr)))
+
+(define (amap f alist)
+  (if (null? alist)
+      '()
+      (cons (f (caar alist) (cdar alist))
+            (amap f (cdr alist)))))
 
 (define (eval-expr expr env)
   (cond
@@ -522,10 +534,10 @@
        (let ((function (eval-to-weak-head-normal-form function env)))
          (if (is? env function 'lambda)
              (let-values (((formal body) (unfold-lambda function)))
-               (let ((result (eval-expr body
-                                        (hashmap-set env formal argument))))
-                 (display (syntax->datum body)) (newline)
-                 (display (syntax->datum result)) (newline) (newline)
+               (let* ((argument (replacement-only argument env))
+                      (result (eval-expr body (hashmap-set env
+                                                           formal
+                                                           argument))))
                  (if (null? rest)
                      result
                      (eval-expr (cons result rest) env))))
@@ -535,6 +547,9 @@
 
 (define (expanded-eval1 expr env)
   (cond
+    ((is? env expr 'display-no-eval)
+     (pretty (syntax->datum (eval-identifier (syntax-list-ref expr 1) env)))
+     (values #f env))
     ((is? env expr 'define)
      ;; Use weak-head normal form instead of normal order to allow for
      ;; definitions of useful combinators without normal forms (like `Y`).
@@ -569,8 +584,8 @@
                     (lceval (list (empty-wrap expr)) (unbox (current-environment)))))
         (set-box! (current-environment) newmap)
         (when (not (null? exprs))
-          (display (list "result: " (syntax->datum (list-ref exprs 0))))
-          (newline))
+          (display "result: ")
+          (pretty (syntax->datum (list-ref exprs 0))))
         (lcrepl)))))
 
 (define (lcload file) (with-input-from-file file lcrepl))

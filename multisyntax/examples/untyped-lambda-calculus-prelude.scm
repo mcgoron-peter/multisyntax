@@ -89,6 +89,13 @@
       ((define name body)
        (%define name (Y (λ (name) body)))))))
 
+;;; Untyped primitives
+
+(define %true (λ (x y) x))
+(define %false (λ (x y) y))
+
 (define (%cons car cdr) (λ selector (selector car cdr)))
-(define (%car pair) (pair (λ (x y) x)))
-(define (%cdr pair) (pair (λ (x y) y)))
+(define (%car value) (value %true))
+(define (%cdr value) (value %false))
+
+(define %zero (%cons %true %zero))
